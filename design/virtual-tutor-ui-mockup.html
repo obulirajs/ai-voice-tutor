@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Virtual Tutor — UI Design Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f7fb; --panel:#ffffff; --border:#e2e5ec; --text:#1c2230; --muted:#6b7280;
+    --accent:#4f6bed; --accent-soft:#eef1ff; --good:#1f9d55; --warn:#c9821a;
+    --radius:14px; --shadow:0 1px 3px rgba(20,25,40,.06), 0 8px 24px rgba(20,25,40,.05);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text);}
+  .app{display:flex; flex-direction:column; height:100vh; max-width:1400px; margin:0 auto;}
+
+  /* Top bar */
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:var(--panel); border-bottom:1px solid var(--border);}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px;}
+  .brand-mark{width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,#6b8afd,#4f6bed); display:flex; align-items:center; justify-content:center; color:white; font-size:15px;}
+  .topbar-right{display:flex; align-items:center; gap:14px;}
+  select, .pill-btn{font:inherit; padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--panel); color:var(--text); cursor:pointer;}
+  .subject-pill{display:flex; align-items:center; gap:8px; background:var(--accent-soft); color:var(--accent); border:1px solid #d7dffd; padding:6px 12px; border-radius:999px; font-size:13px; font-weight:600;}
+  .cost-badge{font-size:12px; color:var(--muted); background:#f2f3f7; border:1px solid var(--border); padding:6px 10px; border-radius:999px; display:flex; align-items:center; gap:6px;}
+  .cost-badge b{color:var(--text);}
+  .settings-btn{width:36px; height:36px; border-radius:10px; border:1px solid var(--border); background:var(--panel); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px;}
+
+  /* Main layout */
+  .main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:16px; padding:16px 24px; min-height:0;}
+  @media (max-width:860px){ .main{grid-template-columns:1fr;} }
+
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); display:flex; flex-direction:column; min-height:0;}
+  .panel-head{padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;}
+  .panel-title{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);}
+
+  /* Conversation panel */
+  .conversation{flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px;}
+  .msg{max-width:80%; padding:11px 14px; border-radius:14px; font-size:14.5px; line-height:1.5;}
+  .msg.tutor{align-self:flex-start; background:#f2f3f8; border-bottom-left-radius:4px;}
+  .msg.user{align-self:flex-end; background:var(--accent); color:white; border-bottom-right-radius:4px;}
+  .msg .src{display:block; margin-top:6px; font-size:11.5px; color:var(--muted); font-weight:600;}
+  .msg.tutor .src{color:var(--accent);}
+
+  .voice-bar{padding:16px 18px; border-top:1px solid var(--border); display:flex; align-items:center; gap:14px;}
+  .mic-btn{width:54px; height:54px; border-radius:50%; border:none; background:var(--accent); color:white; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(79,107,237,.35); flex:none;}
+  .waveform{flex:1; height:32px; display:flex; align-items:center; gap:3px;}
+  .waveform span{width:3px; background:var(--accent); border-radius:2px; opacity:.55;}
+  .status-text{font-size:13px; color:var(--muted); min-width:120px; text-align:right;}
+  .listening .status-text{color:var(--good); font-weight:600;}
+
+  /* Visual companion */
+  .companion-tabs{display:flex; gap:6px; padding:10px 14px 0;}
+  .tab{padding:7px 12px; font-size:12.5px; font-weight:600; color:var(--muted); border-radius:8px 8px 0 0; cursor:pointer;}
+  .tab.active{color:var(--accent); background:var(--accent-soft);}
+  .companion-body{flex:1; padding:20px; overflow-y:auto;}
+  .companion-card{border:1px solid var(--border); border-radius:12px; padding:18px; background:#fbfbfd;}
+  .companion-card h4{margin:0 0 10px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+  .formula-box{font-size:20px; padding:14px 0;}
+  .accent-table{width:100%; border-collapse:collapse; font-size:14px; margin-top:8px;}
+  .accent-table td,.accent-table th{padding:8px 10px; border-bottom:1px solid var(--border); text-align:left;}
+  .accent-table th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase;}
+  .diagram-placeholder{height:160px; border-radius:10px; background:repeating-linear-gradient(45deg,#eef1ff,#eef1ff 10px,#f6f7fb 10px,#f6f7fb 20px); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; margin-top:10px;}
+
+  /* Bottom strip: subject / upload */
+  .bottom-strip{display:flex; gap:16px; padding:0 24px 20px;}
+  .strip-panel{flex:1; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; box-shadow:var(--shadow);}
+  .strip-panel h5{margin:0 0 8px; font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+  .subject-chips{display:flex; gap:8px; flex-wrap:wrap;}
+  .chip{padding:7px 13px; border-radius:999px; border:1px solid var(--border); font-size:13px; cursor:pointer; background:#fff;}
+  .chip.active{background:var(--accent); color:white; border-color:var(--accent);}
+  .upload-row{display:flex; align-items:center; gap:10px; border:1.5px dashed var(--border); border-radius:10px; padding:12px 14px; font-size:13px; color:var(--muted);}
+  .upload-row .go{margin-left:auto; padding:6px 12px; font-size:12.5px;}
+
+  footer.note{padding:10px 24px 18px; font-size:11.5px; color:var(--muted); text-align:center;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="brand-mark">VT</span> Virtual Tutor</div>
+    <div class="topbar-right">
+      <span class="subject-pill">📘 French · Ch. 5 — Le Présent</span>
+      <span class="cost-badge">Session cost: <b>$0.04</b> · 3 turns</span>
+      <select title="Model provider">
+        <option>Local — Ollama (llama3.1)</option>
+        <option selected>Cloud — Claude API</option>
+      </select>
+      <button class="settings-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- LEFT: Voice / conversation -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Conversation</span>
+        <span style="font-size:12px; color:var(--muted);">French · Grammar</span>
+      </div>
+      <div class="conversation">
+        <div class="msg tutor">Bonjour ! Ready to continue with the present tense, or did the homework bring up something specific?</div>
+        <div class="msg user">I don't get why "aller" doesn't follow the regular -er pattern.</div>
+        <div class="msg tutor">Good catch — <em>aller</em> is one of the irregular verbs. Let me show you the conjugation table alongside this.
+          <span class="src">Source: Ch. 5, p.42 — uploaded textbook</span>
+        </div>
+        <div class="msg user">Can you also show me how "je vais" sounds?</div>
+      </div>
+      <div class="voice-bar listening">
+        <button class="mic-btn">🎙</button>
+        <div class="waveform" id="wave"></div>
+        <div class="status-text">Listening…</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Visual companion -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Visual Companion</span>
+      </div>
+      <div class="companion-tabs">
+        <div class="tab active">Grammar table</div>
+        <div class="tab">Formula</div>
+        <div class="tab">Diagram</div>
+        <div class="tab">Source page</div>
+      </div>
+      <div class="companion-body">
+        <div class="companion-card">
+          <h4>Aller — Present Tense (Irregular)</h4>
+          <table class="accent-table">
+            <tr><th>Pronoun</th><th>Form</th><th>Pronunciation note</th></tr>
+            <tr><td>je</td><td>vais</td><td>silent -s, nasal "vé"</td></tr>
+            <tr><td>tu</td><td>vas</td><td>rhymes with "bas"</td></tr>
+            <tr><td>il / elle</td><td>va</td><td>short, open "a"</td></tr>
+            <tr><td>nous</td><td>allons</td><td>liaison with next vowel</td></tr>
+            <tr><td>vous</td><td>allez</td><td>closed "é" ending</td></tr>
+            <tr><td>ils / elles</td><td>vont</td><td>nasal "on"</td></tr>
+          </table>
+          <div style="margin-top:14px;">
+            <h4>Example formula rendering (Math subject)</h4>
+            <div class="formula-box" id="katex-target"></div>
+          </div>
+          <div class="diagram-placeholder">Diagram placeholder — e.g. Science chapter figure, shown when tutor references it</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom: subject switch + uploads -->
+  <div class="bottom-strip">
+    <div class="strip-panel">
+      <h5>Subjects</h5>
+      <div class="subject-chips">
+        <div class="chip active">French</div>
+        <div class="chip">Mathematics</div>
+        <div class="chip">Science</div>
+        <div class="chip">+ Add subject</div>
+      </div>
+    </div>
+    <div class="strip-panel">
+      <h5>Assignment / ad-hoc upload</h5>
+      <div class="upload-row">
+        📎 Drop a PDF or photo of your assignment to ask doubts about it
+        <button class="pill-btn go">Upload</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="note">UI design mockup — Virtual Tutor · voice-first with visual companion · v1 concept, not wired to the backend</footer>
+</div>
+
+<script>
+  // decorative waveform bars
+  const wave = document.getElementById('wave');
+  for(let i=0;i<40;i++){
+    const bar = document.createElement('span');
+    const h = 6 + Math.round(Math.random()*24);
+    bar.style.height = h+'px';
+    wave.appendChild(bar);
+  }
+  setInterval(()=>{
+    document.querySelectorAll('#wave span').forEach(b=>{
+      b.style.height = (6 + Math.round(Math.random()*24))+'px';
+    });
+  }, 350);
+
+  // subject chip toggle
+  document.querySelectorAll('.chip').forEach(c=>{
+    c.addEventListener('click', ()=>{
+      document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+      c.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+
+  // KaTeX formula example
+  if(window.katex){
+    katex.render("x^2 + y^2 = z^2", document.getElementById('katex-target'), {throwOnError:false});
+  }
+</script>
+</body>
+</html>
