@@ -6,3 +6,4 @@ aiosqlite>=0.20
 python-multipart>=0.0.9
 ollama>=0.3
 anthropic>=0.34
+python-dotenv

@@ -53,7 +53,7 @@ cat > backend/.env.example << 'EOF'
 # Copy to .env and fill in. Never commit the real .env.
 ANTHROPIC_API_KEY=
 MODEL_PROVIDER=ollama   # ollama | anthropic
-OLLAMA_MODEL=llama3.1
+OLLAMA_MODEL=llama3.2:1b
 ANTHROPIC_MODEL=claude-sonnet-5
 EOF
 
