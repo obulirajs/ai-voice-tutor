@@ -92,7 +92,7 @@ async def run_golden_qa_check(
     results: list[GoldenQuestionResult] = []
 
     for golden_question in questions:
-        (vector,) = embedding_provider.embed([golden_question.question])
+        (vector,) = embedding_provider.embed([golden_question.question]).embeddings
         hits = await vector_store.search(collection, vector, top_k=top_k)
 
         retrieved = [

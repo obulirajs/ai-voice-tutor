@@ -11,6 +11,8 @@ from app.knowledge import (
     SearchResult,
     VectorStore,
     check_ingestion_consistency,
+    check_subject_language_mismatch,
+    detect_chunk_language,
     get_vector_store,
     parse_expected_page,
     run_golden_qa_check,
@@ -18,7 +20,7 @@ from app.knowledge import (
 )
 from app.knowledge import store as vec_store_sql
 from app.knowledge.sqlite_vec_store import SqliteVecStore
-from app.models import EmbeddingProvider
+from app.models import EmbeddingProvider, EmbeddingResponse, Usage
 
 
 @pytest.fixture
@@ -244,6 +246,81 @@ def test_check_ingestion_consistency_handles_no_chunks(vector_store: VectorStore
     asyncio.run(scenario())
 
 
+# --- detect_chunk_language / check_subject_language_mismatch (subject-mismatch warning) ---
+
+
+def test_detect_chunk_language_recognizes_english() -> None:
+    assert detect_chunk_language("This is an ordinary English paragraph about grammar and vocabulary.") == "english"
+
+
+def test_detect_chunk_language_recognizes_french_accents() -> None:
+    assert detect_chunk_language("Le professeur pose des questions différentes à chaque élève après le cours.") == (
+        "french"
+    )
+
+
+def test_detect_chunk_language_recognizes_devanagari() -> None:
+    assert detect_chunk_language("यह एक हिंदी वाक्य है जो छात्रों के लिए लिखा गया है।") == "hindi"
+
+
+def test_detect_chunk_language_returns_none_for_weak_signal() -> None:
+    assert detect_chunk_language("12 3.4 - () %") is None
+    assert detect_chunk_language("") is None
+
+
+def test_check_subject_language_mismatch_warns_for_english_content_under_french() -> None:
+    english_chunks = [
+        "Chapter one covers the basics of French grammar and vocabulary for beginners.",
+        "Students should practice these verb conjugations every day after class.",
+        "The next lesson introduces new adjectives and common expressions used daily.",
+        "Homework this week focuses on reading comprehension and simple dictation exercises.",
+        "Remember to review the pronunciation guide before the listening test on Friday.",
+    ]
+
+    warning = check_subject_language_mismatch("french", english_chunks)
+
+    assert warning is not None
+    assert "English" in warning
+    assert "French" in warning
+
+
+def test_check_subject_language_mismatch_warns_for_hindi_content_under_french() -> None:
+    hindi_chunks = [
+        "यह पाठ फ्रेंच भाषा की पाठ्यपुस्तक नहीं है, यह हिंदी में लिखा गया है।",
+        "छात्रों को यह अध्याय ध्यान से पढ़ना चाहिए और अभ्यास करना चाहिए।",
+        "अगली कक्षा में नए शब्द और वाक्य सिखाए जाएंगे।",
+    ]
+
+    warning = check_subject_language_mismatch("french", hindi_chunks)
+
+    assert warning is not None
+    assert "Hindi" in warning
+    assert "French" in warning
+
+
+def test_check_subject_language_mismatch_silent_when_content_matches_subject() -> None:
+    french_chunks = [
+        "Le professeur explique la conjugaison des verbes réguliers en français.",
+        "Les élèves répètent les phrases après le professeur chaque matin.",
+        "Cette leçon présente le vocabulaire lié à la nourriture et aux repas.",
+    ]
+
+    assert check_subject_language_mismatch("french", french_chunks) is None
+
+
+def test_check_subject_language_mismatch_silent_for_unrecognized_subject() -> None:
+    # No subject other than "french" is mapped to an expected language yet
+    # (see development-plan.md's "Phase 2 of the vision") -- an unmapped
+    # subject must never produce a guessy warning.
+    english_chunks = ["This is plainly English content with no French or Hindi in it at all."]
+
+    assert check_subject_language_mismatch("spanish", english_chunks) is None
+
+
+def test_check_subject_language_mismatch_silent_for_empty_chunks() -> None:
+    assert check_subject_language_mismatch("french", []) is None
+
+
 # --- run_golden_qa_check / summarize_golden_qa_results (Part 2: golden QA endpoint) ---
 
 
@@ -274,8 +351,9 @@ class _FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[0.0] for _ in texts]  # value is irrelevant -- the fake store ignores it
+    def embed(self, texts: list[str]) -> EmbeddingResponse:
+        # value is irrelevant -- the fake store ignores it
+        return EmbeddingResponse(embeddings=[[0.0] for _ in texts], usage=Usage())
 
 
 def test_parse_expected_page_extracts_first_integer_after_p() -> None:

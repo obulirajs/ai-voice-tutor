@@ -72,4 +72,9 @@ class Document(Base):
     page_count: Mapped[int] = mapped_column(Integer, nullable=False)
     scanned_page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # SHA-256 hex digest of the uploaded file bytes, used to reject a
+    # duplicate re-upload (same or differently-named file) within a subject.
+    # Nullable: rows ingested before this column existed have no hash on
+    # record and are simply excluded from duplicate detection.
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

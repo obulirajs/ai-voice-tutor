@@ -5,6 +5,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 import pymupdf
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -12,9 +13,15 @@ from app.ingestion import ingest_pdf
 from app.ingestion.chunking import chunk_text
 from app.ingestion.pdf import load_pdf, page_is_scanned
 from app.knowledge import Chunk, SearchResult, VectorStore
-from app.models import EmbeddingProvider, VisionProvider
+from app.models import (
+    EmbeddingProvider,
+    EmbeddingResponse,
+    Usage,
+    VisionProvider,
+    VisionResponse,
+)
 from app.storage import get_or_create_subject, list_documents
-from app.storage.models import Base
+from app.storage.models import Base, UsageEvent
 
 Scenario = Callable[[AsyncSession], Coroutine[Any, Any, None]]
 
@@ -53,8 +60,9 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[float(word in text.lower()) for word in _VOCAB] for text in texts]
+    def embed(self, texts: list[str]) -> EmbeddingResponse:
+        embeddings = [[float(word in text.lower()) for word in _VOCAB] for text in texts]
+        return EmbeddingResponse(embeddings=embeddings, usage=Usage(input_tokens=len(texts) * 10, output_tokens=None))
 
 
 class FakeVisionProvider(VisionProvider):
@@ -62,9 +70,17 @@ class FakeVisionProvider(VisionProvider):
         self._transcription = transcription
         self.calls: list[tuple[bytes, str, str]] = []
 
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> str:
+    @property
+    def provider_name(self) -> str:
+        return "fake"
+
+    @property
+    def model_name(self) -> str:
+        return "fake-vision"
+
+    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
         self.calls.append((image_bytes, media_type, instructions))
-        return self._transcription
+        return VisionResponse(text=self._transcription, usage=Usage(input_tokens=200, output_tokens=50))
 
 
 class FakeVectorStore(VectorStore):
@@ -242,6 +258,7 @@ def test_ingest_pdf_extracts_text_page_directly_without_vision_call() -> None:
             vision,
             FakeVectorStore(),
             subject_id=subject.id,
+            subject_name="french",
             filename="chapter5.pdf",
             pdf_bytes=_build_test_pdf(),
         )
@@ -265,6 +282,7 @@ def test_ingest_pdf_records_document_row() -> None:
             FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
             FakeVectorStore(),
             subject_id=subject.id,
+            subject_name="french",
             filename="chapter5.pdf",
             pdf_bytes=_build_test_pdf(),
         )
@@ -290,6 +308,7 @@ def test_ingest_pdf_runs_consistency_check_and_it_reaches_the_result() -> None:
             FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
             FakeVectorStore(),
             subject_id=subject.id,
+            subject_name="french",
             filename="chapter5.pdf",
             pdf_bytes=_build_test_pdf(),
         )
@@ -323,6 +342,7 @@ def test_ingest_pdf_consistency_check_reports_failure_when_storage_is_broken() -
             FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
             BrokenVectorStore(),
             subject_id=subject.id,
+            subject_name="french",
             filename="chapter5.pdf",
             pdf_bytes=_build_test_pdf(),
         )
@@ -345,6 +365,7 @@ def test_ingest_pdf_transcribes_scanned_page_via_vision_provider() -> None:
             vision,
             FakeVectorStore(),
             subject_id=subject.id,
+            subject_name="french",
             filename="chapter5.pdf",
             pdf_bytes=_build_test_pdf(),
         )
@@ -353,5 +374,139 @@ def test_ingest_pdf_transcribes_scanned_page_via_vision_provider() -> None:
         image_bytes, media_type, _instructions = vision.calls[0]
         assert media_type == "image/png"
         assert image_bytes.startswith(b"\x89PNG")
+
+    run(scenario)
+
+
+def test_ingest_pdf_logs_usage_events_for_vision_and_embedding_calls() -> None:
+    """Observability must cover ingestion, not just the chat path: one
+    usage_events row per vision call (per scanned page) and one per
+    embedding call (one batched call over all chunks), even though no chat
+    question has been asked yet.
+    """
+
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
+            FakeVectorStore(),
+            subject_id=subject.id,
+            subject_name="french",
+            filename="chapter5.pdf",
+            pdf_bytes=_build_test_pdf(),
+        )
+
+        rows = (await db.execute(select(UsageEvent).order_by(UsageEvent.id))).scalars().all()
+
+        assert len(rows) == 2
+        assert all(row.session_id is None for row in rows)
+        assert all(row.subject_id == subject.id for row in rows)
+
+        vision_events = [r for r in rows if r.provider == "fake" and r.model == "fake-vision"]
+        assert len(vision_events) == 1
+        assert vision_events[0].input_tokens == 200
+        assert vision_events[0].output_tokens == 50
+        assert vision_events[0].cost_usd == 0.0  # not in the pricing table, same as an unpriced Ollama model
+        assert vision_events[0].latency_ms is not None
+
+        embedding_events = [r for r in rows if r.provider == "fake" and r.model == "fake-embed"]
+        assert len(embedding_events) == 1
+        assert embedding_events[0].input_tokens == result.chunk_count * 10
+        assert embedding_events[0].output_tokens is None
+        assert embedding_events[0].cost_usd == 0.0
+        assert embedding_events[0].latency_ms is not None
+
+    run(scenario)
+
+
+def _build_english_test_pdf() -> bytes:
+    """Six pages of unambiguously English text -- each page's extracted text
+    becomes its own chunk (chunking is per-page), so this reliably produces
+    >=5 chunks for the subject/language sanity check to sample from.
+    """
+    sentences = [
+        "This chapter reviews ordinary English grammar and vocabulary for beginner students.",
+        "Students should practice these verb conjugations every single day after class.",
+        "The next lesson introduces new adjectives and common expressions used daily.",
+        "Homework this week focuses on reading comprehension and simple dictation exercises.",
+        "Remember to review the pronunciation guide before the listening test on Friday.",
+        "Class participation and written assignments both count toward the final grade.",
+    ]
+    document = pymupdf.open()
+    for sentence in sentences:
+        page = document.new_page(width=612, height=200)
+        page.insert_text((50, 50), sentence * 3)  # comfortably above the min-signal threshold
+
+    pdf_bytes = document.tobytes()
+    document.close()
+    return pdf_bytes
+
+
+def _build_french_test_pdf() -> bytes:
+    """Six pages of genuine accented French text -- unlike _build_test_pdf()'s
+    unaccented pseudo-French fixture, this carries the character-range
+    signal the language heuristic actually looks for.
+    """
+    sentences = [
+        "Le professeur explique la conjugaison des verbes réguliers en français.",
+        "Les élèves répètent les phrases après le professeur chaque matin.",
+        "Cette leçon présente le vocabulaire lié à la nourriture et aux repas.",
+        "Il faut réviser les leçons précédentes avant l'examen de vendredi prochain.",
+        "La grammaire française comprend plusieurs règles particulières à apprendre.",
+        "Chaque élève doit répondre aux questions posées à la fin du chapitre.",
+    ]
+    document = pymupdf.open()
+    for sentence in sentences:
+        page = document.new_page(width=612, height=200)
+        page.insert_text((50, 50), sentence * 3)
+
+    pdf_bytes = document.tobytes()
+    document.close()
+    return pdf_bytes
+
+
+def test_ingest_pdf_warns_on_english_content_uploaded_to_french_subject() -> None:
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            FakeVisionProvider(transcription="unused"),
+            FakeVectorStore(),
+            subject_id=subject.id,
+            subject_name="french",
+            filename="wrong-subject.pdf",
+            pdf_bytes=_build_english_test_pdf(),
+        )
+
+        assert result.chunk_count >= 5
+        assert result.subject_mismatch_warning is not None
+        assert "English" in result.subject_mismatch_warning
+        assert "French" in result.subject_mismatch_warning
+
+    run(scenario)
+
+
+def test_ingest_pdf_no_warning_for_french_content_uploaded_to_french_subject() -> None:
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            FakeVisionProvider(transcription="unused"),
+            FakeVectorStore(),
+            subject_id=subject.id,
+            subject_name="french",
+            filename="chapter5.pdf",
+            pdf_bytes=_build_french_test_pdf(),
+        )
+
+        assert result.chunk_count >= 5
+        assert result.subject_mismatch_warning is None
 
     run(scenario)

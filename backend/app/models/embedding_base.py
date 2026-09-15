@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+from .base import Usage
+
+
+@dataclass(frozen=True)
+class EmbeddingResponse:
+    embeddings: list[list[float]]
+    usage: Usage = field(default_factory=Usage)
 
 
 class EmbeddingProvider(ABC):
@@ -21,6 +30,6 @@ class EmbeddingProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Return one embedding vector per input text, same order."""
+    def embed(self, texts: list[str]) -> EmbeddingResponse:
+        """Return one embedding vector per input text (same order), plus token usage."""
         raise NotImplementedError

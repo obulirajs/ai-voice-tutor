@@ -13,11 +13,13 @@ from app.knowledge import Chunk, SearchResult, VectorStore, get_vector_store
 from app.main import app
 from app.models import (
     EmbeddingProvider,
+    EmbeddingResponse,
     Message,
     ModelProvider,
     ModelResponse,
     Usage,
     VisionProvider,
+    VisionResponse,
     get_embedding_provider,
     get_provider,
     get_vision_provider,
@@ -145,13 +147,22 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[float(len(t) % 7), float(hash(t) % 11)] for t in texts]
+    def embed(self, texts: list[str]) -> EmbeddingResponse:
+        embeddings = [[float(len(t) % 7), float(hash(t) % 11)] for t in texts]
+        return EmbeddingResponse(embeddings=embeddings, usage=Usage(input_tokens=len(texts) * 10, output_tokens=None))
 
 
 class FakeVisionProvider(VisionProvider):
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> str:
-        return "unused"
+    @property
+    def provider_name(self) -> str:
+        return "fake"
+
+    @property
+    def model_name(self) -> str:
+        return "fake-vision"
+
+    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+        return VisionResponse(text="unused", usage=Usage(input_tokens=200, output_tokens=50))
 
 
 class FakeVectorStore(VectorStore):
@@ -229,7 +240,174 @@ def test_upload_document_rejects_non_pdf(override_get_db: None) -> None:
         app.dependency_overrides.pop(get_vision_provider, None)
         app.dependency_overrides.pop(get_vector_store, None)
 
-    assert response.status_code == 400
+    assert response.status_code == 415
+
+
+def test_upload_document_rejects_pdf_content_type_with_non_pdf_bytes(override_get_db: None) -> None:
+    """A spoofed Content-Type header alone must not be enough -- the actual
+    file signature (magic bytes) is checked too.
+    """
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/subjects/french/documents",
+            files={"file": ("fake.pdf", b"this is not really a pdf", "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 415
+
+
+def test_upload_document_rejects_oversized_file(override_get_db: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UPLOAD_MAX_SIZE_MB", "0.0001")  # ~100 bytes, smaller than the test PDF
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 413
+
+
+def test_upload_document_rejects_corrupt_pdf(override_get_db: None) -> None:
+    """Bytes that pass the magic-byte check (start with %PDF-) but aren't a
+    real, openable PDF structure.
+    """
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/subjects/french/documents",
+            files={"file": ("corrupt.pdf", b"%PDF-1.4\nnot actually a valid pdf body", "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 422
+
+
+def test_upload_document_rejects_pdf_with_no_extractable_content(override_get_db: None) -> None:
+    document = pymupdf.open()
+    document.new_page(width=400, height=600)  # blank: no text, no images
+    blank_pdf_bytes = document.tobytes()
+    document.close()
+
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/subjects/french/documents",
+            files={"file": ("blank.pdf", blank_pdf_bytes, "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 422
+
+
+def test_upload_document_rejects_duplicate_content_hash(override_get_db: None) -> None:
+    shared_store = FakeVectorStore()
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: shared_store
+    client = TestClient(app)
+    pdf_bytes = _build_test_pdf()
+
+    try:
+        first = client.post(
+            "/subjects/french/documents",
+            files={"file": ("chapter5.pdf", pdf_bytes, "application/pdf")},
+        )
+        assert first.status_code == 200
+        first_document_id = first.json()["document_id"]
+
+        # Same bytes, different filename -- still a duplicate by content.
+        second = client.post(
+            "/subjects/french/documents",
+            files={"file": ("chapter5-renamed.pdf", pdf_bytes, "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert second.status_code == 409
+    assert str(first_document_id) in second.json()["detail"]
+
+
+def test_upload_document_allows_same_content_in_different_subjects(override_get_db: None) -> None:
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+    pdf_bytes = _build_test_pdf()
+
+    try:
+        french = client.post(
+            "/subjects/french/documents",
+            files={"file": ("chapter5.pdf", pdf_bytes, "application/pdf")},
+        )
+        spanish = client.post(
+            "/subjects/spanish/documents",
+            files={"file": ("chapter5.pdf", pdf_bytes, "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert french.status_code == 200
+    assert spanish.status_code == 200
+
+
+def test_upload_document_rejects_concurrent_ingestion_for_same_subject(override_get_db: None) -> None:
+    from app.api import documents as documents_module
+
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    documents_module._ingesting_subjects.add("french")
+    try:
+        response = client.post(
+            "/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        )
+    finally:
+        documents_module._ingesting_subjects.discard("french")
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 429
+    assert response.headers.get("retry-after") is not None
 
 
 def test_delete_document_removes_row_and_chunks_allowing_clean_reingest(override_get_db: None) -> None:

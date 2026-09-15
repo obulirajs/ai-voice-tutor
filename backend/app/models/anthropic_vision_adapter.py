@@ -5,7 +5,8 @@ from typing import Any
 
 import anthropic
 
-from .vision_base import VisionProvider
+from .base import Usage
+from .vision_base import VisionProvider, VisionResponse
 
 _DEFAULT_MAX_TOKENS = 2048
 
@@ -22,7 +23,15 @@ class AnthropicVisionProvider(VisionProvider):
         self._model = model
         self._client = client or anthropic.Anthropic(api_key=api_key)
 
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> str:
+    @property
+    def provider_name(self) -> str:
+        return "anthropic"
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
         encoded = base64.standard_b64encode(image_bytes).decode("ascii")
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -41,4 +50,8 @@ class AnthropicVisionProvider(VisionProvider):
             ],
         }
         result = self._client.messages.create(**kwargs)
-        return "".join(block.text for block in result.content if block.type == "text")
+        text = "".join(block.text for block in result.content if block.type == "text")
+        return VisionResponse(
+            text=text,
+            usage=Usage(input_tokens=result.usage.input_tokens, output_tokens=result.usage.output_tokens),
+        )

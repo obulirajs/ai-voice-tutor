@@ -82,6 +82,7 @@ async def create_document(
     page_count: int,
     scanned_page_count: int = 0,
     chunk_count: int = 0,
+    content_hash: str | None = None,
 ) -> Document:
     document = Document(
         subject_id=subject_id,
@@ -90,10 +91,18 @@ async def create_document(
         page_count=page_count,
         scanned_page_count=scanned_page_count,
         chunk_count=chunk_count,
+        content_hash=content_hash,
     )
     db.add(document)
     await db.flush()
     return document
+
+
+async def get_document_by_hash(db: AsyncSession, subject_id: int, content_hash: str) -> Document | None:
+    result = await db.execute(
+        select(Document).where(Document.subject_id == subject_id, Document.content_hash == content_hash)
+    )
+    return result.scalar_one_or_none()
 
 
 async def list_documents(db: AsyncSession, subject_id: int) -> list[Document]:

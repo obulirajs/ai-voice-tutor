@@ -3,10 +3,10 @@
 Public surface: the `VectorStore` interface, its `Chunk`/`SearchResult`
 types, `get_vector_store()` (reads VECTOR_STORE from the environment and
 returns the configured adapter), the automatic post-ingestion
-`check_ingestion_consistency()`, and the standalone, read-only
-`run_golden_qa_check()`. Callers (ingestion, api) must depend on these,
-never import `SqliteVecStore` directly — the same dependency-inversion
-convention as app.models' ModelProvider/get_provider().
+`check_ingestion_consistency()` and `check_subject_language_mismatch()`,
+and the standalone, read-only `run_golden_qa_check()`. Callers (ingestion,
+api) must depend on these, never import `SqliteVecStore` directly — the
+same dependency-inversion convention as app.models' ModelProvider/get_provider().
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from .golden_qa import (
     run_golden_qa_check,
     summarize_golden_qa_results,
 )
+from .language_check import check_subject_language_mismatch, detect_chunk_language
 from .sqlite_vec_store import SqliteVecStore
 
 __all__ = [
@@ -43,6 +44,8 @@ __all__ = [
     "TypeSummary",
     "VectorStore",
     "check_ingestion_consistency",
+    "check_subject_language_mismatch",
+    "detect_chunk_language",
     "get_vector_store",
     "parse_expected_page",
     "run_golden_qa_check",

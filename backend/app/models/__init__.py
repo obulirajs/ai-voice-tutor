@@ -15,18 +15,22 @@ import os
 from .anthropic_adapter import AnthropicProvider
 from .anthropic_vision_adapter import AnthropicVisionProvider
 from .base import Message, ModelProvider, ModelResponse, Usage
-from .embedding_base import EmbeddingProvider
+from .embedding_base import EmbeddingProvider, EmbeddingResponse
 from .ollama_adapter import OllamaProvider
 from .ollama_embedding_adapter import OllamaEmbeddingProvider
-from .vision_base import VisionProvider
+from .pricing import estimate_cost_usd
+from .vision_base import VisionProvider, VisionResponse
 
 __all__ = [
     "EmbeddingProvider",
+    "EmbeddingResponse",
     "Message",
     "ModelProvider",
     "ModelResponse",
     "Usage",
     "VisionProvider",
+    "VisionResponse",
+    "estimate_cost_usd",
     "get_embedding_provider",
     "get_provider",
     "get_vision_provider",

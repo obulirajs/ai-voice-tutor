@@ -21,10 +21,10 @@ from pathlib import Path
 # from the backend directory without installing the app as a package.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dotenv import load_dotenv  # noqa: E402
+from dotenv import load_dotenv
 
-from app.knowledge import get_vector_store  # noqa: E402
-from app.models import get_embedding_provider  # noqa: E402
+from app.knowledge import get_vector_store
+from app.models import get_embedding_provider
 
 # The French textbook's collection from this project's per-subject
 # namespacing (collection_for_subject(subject_id) in app.ingestion.pipeline).
@@ -44,7 +44,7 @@ async def main() -> None:
     vector_store = get_vector_store()
 
     for question in QUESTIONS:
-        (query_embedding,) = embedding_provider.embed([question])
+        (query_embedding,) = embedding_provider.embed([question]).embeddings
         results = await vector_store.search(COLLECTION, query_embedding, top_k=3)
 
         print("=" * 80)

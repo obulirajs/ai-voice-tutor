@@ -16,7 +16,7 @@ from typing import cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Message as ProviderMessage
-from app.models import ModelProvider
+from app.models import ModelProvider, estimate_cost_usd
 from app.storage import (
     ChatSession,
     append_message,
@@ -26,8 +26,6 @@ from app.storage import (
     get_session,
     log_usage_event,
 )
-
-from .pricing import estimate_cost_usd
 
 __all__ = ["TurnResult", "handle_turn"]
 
