@@ -1,0 +1,158 @@
+[
+  {
+    "question": "Where does Akanksha Sethi live in France, and why is her family there?",
+    "expected_answer": "Akanksha lives at 2 rue Balzac in France. Her father works at the Indian Embassy in France.",
+    "source": "Leçon 1, p.4-5",
+    "type": "comprehension"
+  },
+  {
+    "question": "What French proverb matches the idea that regions and their products share the same name, like Champagne and champagne?",
+    "expected_answer": "The textbook gives examples of regions whose names match their famous products: Champagne/champagne, Camembert/camembert, and Cognac/cognac.",
+    "source": "Leçon 1, p.8",
+    "type": "vocab"
+  },
+  {
+    "question": "What is the futur antérieur of the verb DONNER for 'nous'?",
+    "expected_answer": "Nous aurons donné.",
+    "source": "Leçon 2, p.13 (conjugation table)",
+    "type": "table-or-diagram"
+  },
+  {
+    "question": "What solutions does Pauline suggest when Ali worries about university costs?",
+    "expected_answer": "Pauline suggests bourses (scholarships), emplois à mi-temps (part-time jobs), and IUT (Instituts Universitaires de Technologie).",
+    "source": "Leçon 2, p.11-12",
+    "type": "comprehension"
+  },
+  {
+    "question": "What is the nominal form (forme nominale) of the verb 'arriver'?",
+    "expected_answer": "Arrivée.",
+    "source": "Leçon 2, p.16 (Forme verbale/nominale table)",
+    "type": "grammar"
+  },
+  {
+    "question": "Where does Pauline meet her cousin Adeline Veron, and what grammatical topic is introduced in that lesson?",
+    "expected_answer": "Pauline meets Adeline at Métro Châtelet. The lesson introduces the pronom relatif 'dont' and pronoms relatifs composés (lequel, laquelle, lesquels, lesquelles).",
+    "source": "Leçon 3, p.20-23",
+    "type": "comprehension"
+  },
+  {
+    "question": "What job advertisements appear on page 27 of the textbook?",
+    "expected_answer": "Page 27 contains scanned job advertisements (petites annonces) with small print and handwritten-style text, used in the context of Pauline and Adeline's discussion about chercher du travail (looking for work).",
+    "source": "Leçon 3, p.27 (scanned page)",
+    "type": "ocr-page"
+  },
+  {
+    "question": "What three documents does one need to get a library card (carte de lecteur) according to the textbook?",
+    "expected_answer": "A pièce d'identité (ID document), une autorisation des parents (parental authorization), and une quittance d'électricité (electricity bill as proof of address).",
+    "source": "Leçon 4, p.31-32",
+    "type": "vocab"
+  },
+  {
+    "question": "Which fable by La Fontaine is referenced in Leçon 4, and from which collection?",
+    "expected_answer": "Le Renard et les Raisins (The Fox and the Grapes), from LES FABLES, livre III, fable 11 by La Fontaine.",
+    "source": "Leçon 4, p.38-39",
+    "type": "comprehension"
+  },
+  {
+    "question": "What is the rule for using the pronoun Y versus EN as shown in the grammar table?",
+    "expected_answer": "Y replaces complements introduced by à, chez, en, dans, or sur. EN replaces complements introduced by de or the partitive article.",
+    "source": "Leçon 5, p.43 (Y/En table)",
+    "type": "grammar"
+  },
+  {
+    "question": "What newspapers and magazines are mentioned in the lesson on media, and what is the publication frequency of each?",
+    "expected_answer": "Le Monde (quotidien/daily), Le Figaro (quotidien), L'Express (hebdomadaire/weekly), Reader's Digest (mensuel/monthly), Le Français dans le Monde (revue/review).",
+    "source": "Leçon 5, p.46-47",
+    "type": "vocab"
+  },
+  {
+    "question": "What media logos and newspaper front pages appear on page 48 of the textbook?",
+    "expected_answer": "Page 48 shows scanned newspaper front pages including L'Express, Le Monde, and Le Figaro, along with TV channel logos in a grid layout and a blog screenshot.",
+    "source": "Leçon 5, p.48 (scanned page)",
+    "type": "ocr-page"
+  },
+  {
+    "question": "What facts about the Louvre museum are given in the textbook?",
+    "expected_answer": "The Louvre covers 40 hectares, contains 6000 paintings, has a glass pyramid designed by architect Ieoh Ming Pei, and receives about 9 million visitors.",
+    "source": "Leçon 6, p.54-55",
+    "type": "comprehension"
+  },
+  {
+    "question": "What is the French title of the film 'Home Alone', and what handwritten-style text appears on page 53 about it?",
+    "expected_answer": "The French title is 'Maman, j'ai raté l'avion'. Page 53 contains handwritten-style cursive text in callout boxes summarizing the film.",
+    "source": "Leçon 6, p.53 (scanned page with cursive text)",
+    "type": "ocr-page"
+  },
+  {
+    "question": "What is the pronom possessif for 'notre' in the feminine plural form?",
+    "expected_answer": "Les nôtres.",
+    "source": "Leçon 7, p.63 (Pronoms possessifs table)",
+    "type": "table-or-diagram"
+  },
+  {
+    "question": "What health-related vocabulary and expressions are introduced when Nargis visits the doctor?",
+    "expected_answer": "Nargis has un rhume (a cold). Vocabulary includes: ordonnance (prescription), pharmacie (pharmacy), sécurité sociale, carte Vitale. Expressions: avoir mal à la tête/au dos/aux dents, crise cardiaque, vertige, nuit blanche, insomnie.",
+    "source": "Leçon 7, p.60-62",
+    "type": "vocab"
+  },
+  {
+    "question": "What are the irregular subjunctive stems for être, avoir, savoir, and pouvoir?",
+    "expected_answer": "Être → sois, avoir → aie, savoir → sache, pouvoir → puisse.",
+    "source": "Leçon 8, p.71",
+    "type": "grammar"
+  },
+  {
+    "question": "What are the three patterns of 'si' hypothétique and their tense sequences?",
+    "expected_answer": "1) Si + présent → futur simple. 2) Si + imparfait → conditionnel présent. 3) Si + plus-que-parfait → conditionnel passé.",
+    "source": "Leçon 9, p.78 (Si hypothétique table)",
+    "type": "grammar"
+  },
+  {
+    "question": "How does the textbook compare the French and Indian political systems regarding the role of the head of government?",
+    "expected_answer": "In France, the Président is elected for 5 years, is chef des armées, and nommes the Premier ministre. In India, the Premier Ministre (Prime Minister) has more executive power than in France, Lok Sabha and Rajya Sabha form the parliament, and the Chief Minister leads state government.",
+    "source": "Leçon 10, p.85-92",
+    "type": "comprehension"
+  },
+  {
+    "question": "In the discours rapporté table, how do you convert the direct speech «Viens ce soir» to indirect speech?",
+    "expected_answer": "Il te demande de venir ce soir. (A phrase impérative in direct speech uses de + infinitif in indirect speech.)",
+    "source": "Leçon 10, p.87 (Style Direct/Indirect table)",
+    "type": "grammar"
+  },
+  {
+    "question": "What are the seven labeled parts of a computer in the diagram on page 99?",
+    "expected_answer": "1. Écran (screen), 2. Modem, 3. Unité centrale (CPU/tower), 4. Souris (mouse), 5. Haut-parleur (speaker), 6. Imprimante (printer), 7. Clavier (keyboard).",
+    "source": "Leçon 11, p.99 (Computer parts diagram)",
+    "type": "vocab"
+  },
+  {
+    "question": "What details appear on the 'Le Monde en Fête' festival poster on page 107?",
+    "expected_answer": "The poster advertises a festival in Nantes on Samedi 21 mars and Dimanche 22 mars, at the Maison de quartier de l'île de Nantes, 2 rue Conan Mériadec. Entry is GRATUIT (free). Website: www.autourdumonde.asso.fr.",
+    "source": "Leçon 12, p.107 (scanned poster with artistic text)",
+    "type": "ocr-page"
+  },
+  {
+    "question": "What is the passé composé of 'aller' for the third person singular feminine?",
+    "expected_answer": "Elle est allée.",
+    "source": "Conjugaisons, p.115-126 (Aller conjugation table)",
+    "type": "grammar"
+  },
+  {
+    "question": "What does the textbook say about the French poet Victor Hugo's major works?",
+    "expected_answer": "This is out of scope. The textbook does not discuss Victor Hugo or his works. It references Jacques Prévert (L'Accent Grave from PAROLES), La Fontaine (Le Renard et les Raisins from LES FABLES), and Saint-Exupéry (Le Petit Prince), but not Victor Hugo.",
+    "source": "Not in the textbook",
+    "type": "out-of-scope"
+  },
+  {
+    "question": "What does the textbook explain about the French passé simple tense?",
+    "expected_answer": "This is out of scope. The textbook does not cover the passé simple. The tenses covered include présent, passé composé, imparfait, futur simple, futur antérieur, conditionnel présent, conditionnel passé, plus-que-parfait, subjonctif, participe présent, and gérondif.",
+    "source": "Not in the textbook",
+    "type": "out-of-scope"
+  },
+  {
+    "question": "What information does the textbook provide about French cuisine, such as recipes for crêpes or croissants?",
+    "expected_answer": "This is out of scope. The textbook does not contain recipes or detailed discussion of French cuisine. It briefly mentions cuisiner un plat d'ailleurs (cooking a dish from elsewhere) in the context of celebrating cultural diversity (Leçon 12), but provides no recipes.",
+    "source": "Not in the textbook",
+    "type": "out-of-scope"
+  }
+]

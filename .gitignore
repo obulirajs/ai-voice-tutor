@@ -10,6 +10,16 @@ venv/
 htmlcov/
 .coverage
 
+# Runtime databases (SQLite metadata DB + sqlite-vec vector store)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Source textbook PDFs (large, not meant to be committed).
+# Golden-QA JSON fixtures in the same folder are fine to track.
+backend/textbooks_input/*.pdf
+
 # Env files
 .env
 *.env.local

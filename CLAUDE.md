@@ -7,6 +7,8 @@ in order:
 2. `docs/architecture.md` — the module map and data flow.
 3. `docs/technical-design.md` — stack, conventions, guardrails, the decided
    UI direction, and the hardware-driven provider default.
+4. `docs/development-plan.md` — the build order: phases, dependencies, and
+   each phase's exit checkpoint.
 
 ## Non-negotiable conventions
 

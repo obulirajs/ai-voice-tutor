@@ -30,6 +30,18 @@ class ModelProvider(ABC):
     adapter — see technical-design.md's dependency-inversion convention.
     """
 
+    @property
+    @abstractmethod
+    def provider_name(self) -> str:
+        """Short adapter name (e.g. "anthropic", "ollama") — logged on usage_events."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
+        """The configured model name — logged on usage_events and used for cost lookup."""
+        raise NotImplementedError
+
     @abstractmethod
     def generate(
         self,

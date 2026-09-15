@@ -14,6 +14,14 @@ class OllamaProvider(ModelProvider):
         self._model = model
         self._client = client or ollama.Client()
 
+    @property
+    def provider_name(self) -> str:
+        return "ollama"
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def generate(
         self,
         messages: list[Message],

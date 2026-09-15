@@ -29,6 +29,20 @@ def test_ollama_provider_generate_parses_response() -> None:
     assert response.usage.output_tokens == 4
 
 
+def test_ollama_provider_exposes_name_and_model() -> None:
+    provider = OllamaProvider(model="llama3.2:1b", client=MagicMock())
+
+    assert provider.provider_name == "ollama"
+    assert provider.model_name == "llama3.2:1b"
+
+
+def test_anthropic_provider_exposes_name_and_model() -> None:
+    provider = AnthropicProvider(model="claude-sonnet-5", api_key="test-key", client=MagicMock())
+
+    assert provider.provider_name == "anthropic"
+    assert provider.model_name == "claude-sonnet-5"
+
+
 def test_ollama_provider_passes_tools_through() -> None:
     fake_client = MagicMock()
     fake_client.chat.return_value = {"message": {"content": "ok"}}

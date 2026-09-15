@@ -7,3 +7,5 @@ python-multipart>=0.0.9
 ollama>=0.3
 anthropic>=0.34
 python-dotenv
+PyMuPDF>=1.24
+sqlite-vec>=0.1

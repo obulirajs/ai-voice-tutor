@@ -1,0 +1,357 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable, Coroutine
+from typing import Any
+
+import pymupdf
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
+
+from app.ingestion import ingest_pdf
+from app.ingestion.chunking import chunk_text
+from app.ingestion.pdf import load_pdf, page_is_scanned
+from app.knowledge import Chunk, SearchResult, VectorStore
+from app.models import EmbeddingProvider, VisionProvider
+from app.storage import get_or_create_subject, list_documents
+from app.storage.models import Base
+
+Scenario = Callable[[AsyncSession], Coroutine[Any, Any, None]]
+
+
+def run(scenario: Scenario) -> None:
+    async def wrapper() -> None:
+        engine = create_async_engine(
+            "sqlite+aiosqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as db:
+            await scenario(db)
+
+        await engine.dispose()
+
+    asyncio.run(wrapper())
+
+
+# A small vocabulary a FakeEmbeddingProvider scores keyword-presence
+# against, so retrieval in tests behaves meaningfully (routes a question to
+# the chunk that actually shares its keyword) without a real embedding model.
+_VOCAB = ["present", "compose", "vocabulaire", "diagramme"]
+
+
+class FakeEmbeddingProvider(EmbeddingProvider):
+    @property
+    def provider_name(self) -> str:
+        return "fake"
+
+    @property
+    def model_name(self) -> str:
+        return "fake-embed"
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[float(word in text.lower()) for word in _VOCAB] for text in texts]
+
+
+class FakeVisionProvider(VisionProvider):
+    def __init__(self, transcription: str) -> None:
+        self._transcription = transcription
+        self.calls: list[tuple[bytes, str, str]] = []
+
+    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> str:
+        self.calls.append((image_bytes, media_type, instructions))
+        return self._transcription
+
+
+class FakeVectorStore(VectorStore):
+    """In-memory VectorStore fake, mirroring how test_api.py fakes ModelProvider."""
+
+    def __init__(self) -> None:
+        self.collections: dict[str, list[Chunk]] = {}
+
+    async def upsert_chunks(self, collection: str, chunks: list[Chunk]) -> None:
+        self.collections.setdefault(collection, []).extend(chunks)
+
+    async def search(self, collection: str, query_embedding: list[float], top_k: int = 5) -> list[SearchResult]:
+        def squared_distance(chunk: Chunk) -> float:
+            return sum((a - b) ** 2 for a, b in zip(chunk.embedding, query_embedding, strict=True))
+
+        ranked = sorted(self.collections.get(collection, []), key=squared_distance)[:top_k]
+        return [
+            SearchResult(
+                text=chunk.text,
+                document_id=chunk.document_id,
+                page_number=chunk.page_number,
+                distance=squared_distance(chunk),
+            )
+            for chunk in ranked
+        ]
+
+    async def delete_document_chunks(self, collection: str, document_id: int) -> None:
+        remaining = [c for c in self.collections.get(collection, []) if c.document_id != document_id]
+        self.collections[collection] = remaining
+
+
+def _build_test_pdf() -> bytes:
+    """Page 1: real text layer. Page 2: scanned (full-page image, no text)."""
+    document = pymupdf.open()
+
+    text_page = document.new_page(width=400, height=600)
+    text_page.insert_text(
+        (50, 50),
+        "Le present tense chunk. Le present s'utilise pour des actions habituelles.",
+    )
+
+    scanned_page = document.new_page(width=400, height=600)
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 600))
+    pixmap.set_rect(pixmap.irect, (200, 200, 200))
+    scanned_page.insert_image(scanned_page.rect, pixmap=pixmap)
+
+    pdf_bytes = document.tobytes()
+    document.close()
+    return pdf_bytes
+
+
+def test_page_is_scanned_detects_text_vs_image_pages() -> None:
+    document = load_pdf(_build_test_pdf())
+
+    assert page_is_scanned(document[0]) is False
+    assert page_is_scanned(document[1]) is True
+
+
+def _build_page(
+    document: pymupdf.Document,
+    *,
+    background: bool,
+    caption_words: str,
+    content_image_bboxes: list[tuple[float, float, float, float]],
+) -> pymupdf.Page:
+    """Builds a 612x792 page shaped like this textbook's real layout: an
+    optional full-page decorative background image, a short caption/label
+    line of real text, and zero or more smaller "content" images placed at
+    the given boxes -- mirroring the low-word-count-plus-embedded-images
+    pattern seen on the real scanned pages this heuristic needs to catch.
+    """
+    page = document.new_page(width=612, height=792)
+
+    if background:
+        bg_pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 612, 792))
+        bg_pixmap.set_rect(bg_pixmap.irect, (240, 240, 240))
+        page.insert_image(page.rect, pixmap=bg_pixmap)
+
+    if caption_words:
+        page.insert_text((50, 50), caption_words)
+
+    for bbox in content_image_bboxes:
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 100, 100))
+        pixmap.set_rect(pixmap.irect, (100, 100, 100))
+        page.insert_image(pymupdf.Rect(*bbox), pixmap=pixmap)
+
+    return page
+
+
+def test_page_is_scanned_flags_low_word_count_page_with_incidental_caption_text() -> None:
+    """Regression test for the Phase 2 golden-QA finding: a page with only a
+    caption/label line of real text (well over the old 40-character
+    threshold) but whose actual content -- a media-logo grid, a poster --
+    lives entirely in embedded images must still be flagged as scanned, not
+    waved through as text-layer because the caption alone passed a raw
+    character-count check.
+    """
+    document = pymupdf.open()
+    # Mirrors PDF page 56 (printed p.48, "media logos"): ~27 words of
+    # caption/label text, a full-page background, and several content
+    # images covering well over the 0.15 coverage threshold.
+    page = _build_page(
+        document,
+        background=True,
+        caption_words="Les medias Je decouvre un hebdomadaire un quotidien des chaines de television un blog une publicite",
+        content_image_bboxes=[
+            (50, 100, 250, 300),
+            (300, 100, 550, 300),
+            (50, 350, 250, 550),
+            (300, 350, 550, 550),
+        ],
+    )
+
+    assert page_is_scanned(page) is True
+    document.close()
+
+
+def test_page_is_scanned_leaves_text_heavy_illustrated_page_as_text_layer() -> None:
+    """A genuinely text-heavy page (a real dialogue/explanation, well above
+    the word-count threshold) must stay classified as text-layer even when
+    it carries a full-page decorative background plus a couple of
+    illustrative images, so ordinary lesson pages don't needlessly go
+    through the slower, paid vision path.
+    """
+    document = pymupdf.open()
+    paragraph = (
+        "Pauline et Ali discutent de leurs projets apres le baccalaureat. "
+        "Ali cherche un travail a mi-temps pendant ses etudes universitaires. "
+        "Pauline lui suggere de contacter le CROUS pour les bourses disponibles. "
+        "Ils parlent aussi des logements etudiants pres du campus."
+    )
+    page = _build_page(
+        document,
+        background=True,
+        caption_words=paragraph,
+        content_image_bboxes=[(50, 550, 250, 700)],
+    )
+
+    assert page_is_scanned(page) is False
+    document.close()
+
+
+def test_chunk_text_splits_on_paragraph_boundaries() -> None:
+    text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
+
+    chunks = chunk_text(text, max_chars=1000)
+
+    assert chunks == ["Paragraph one.\n\nParagraph two.\n\nParagraph three."]
+
+
+def test_chunk_text_packs_up_to_max_chars_then_splits() -> None:
+    # A + B fit together under max_chars (400+2+400=802 <= 900); adding C
+    # would overflow it (802+2+400=1204 > 900), so C starts a new chunk.
+    text = "A" * 400 + "\n\n" + "B" * 400 + "\n\n" + "C" * 400
+
+    chunks = chunk_text(text, max_chars=900)
+
+    assert len(chunks) == 2
+    assert chunks[0] == "A" * 400 + "\n\n" + "B" * 400
+    assert chunks[1] == "C" * 400
+
+
+def test_chunk_text_returns_empty_list_for_blank_text() -> None:
+    assert chunk_text("   \n\n  ") == []
+
+
+def test_ingest_pdf_extracts_text_page_directly_without_vision_call() -> None:
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+        vision = FakeVisionProvider(transcription="unused")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            vision,
+            FakeVectorStore(),
+            subject_id=subject.id,
+            filename="chapter5.pdf",
+            pdf_bytes=_build_test_pdf(),
+        )
+
+        assert result.page_count == 2
+        assert result.scanned_page_count == 1
+        assert result.chunk_count >= 2
+        # Only the scanned page (page 2) should have gone through vision.
+        assert len(vision.calls) == 1
+
+    run(scenario)
+
+
+def test_ingest_pdf_records_document_row() -> None:
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
+            FakeVectorStore(),
+            subject_id=subject.id,
+            filename="chapter5.pdf",
+            pdf_bytes=_build_test_pdf(),
+        )
+
+        documents = await list_documents(db, subject.id)
+
+        assert len(documents) == 1
+        assert documents[0].id == result.document_id
+        assert documents[0].filename == "chapter5.pdf"
+        assert documents[0].page_count == 2
+        assert documents[0].scanned_page_count == 1
+
+    run(scenario)
+
+
+def test_ingest_pdf_runs_consistency_check_and_it_reaches_the_result() -> None:
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
+            FakeVectorStore(),
+            subject_id=subject.id,
+            filename="chapter5.pdf",
+            pdf_bytes=_build_test_pdf(),
+        )
+
+        assert result.consistency_check.sampled > 0
+        assert result.consistency_check.sampled == result.consistency_check.passed
+        assert result.consistency_check.failed == []
+
+    run(scenario)
+
+
+def test_ingest_pdf_consistency_check_reports_failure_when_storage_is_broken() -> None:
+    class BrokenVectorStore(FakeVectorStore):
+        """upsert_chunks works normally, but search() always returns content
+        unrelated to the query -- simulates a corrupted/mismatched embedding
+        between storage and retrieval. The failure must be reported in the
+        result, not swallowed.
+        """
+
+        async def search(self, collection: str, query_embedding: list[float], top_k: int = 5) -> list[SearchResult]:
+            return [
+                SearchResult(text="totally unrelated content", document_id=None, page_number=None, distance=99.0)
+            ]
+
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            FakeVisionProvider(transcription="Diagramme illustrant la conjugaison."),
+            BrokenVectorStore(),
+            subject_id=subject.id,
+            filename="chapter5.pdf",
+            pdf_bytes=_build_test_pdf(),
+        )
+
+        assert result.consistency_check.sampled > 0
+        assert result.consistency_check.passed == 0
+        assert len(result.consistency_check.failed) == result.consistency_check.sampled
+
+    run(scenario)
+
+
+def test_ingest_pdf_transcribes_scanned_page_via_vision_provider() -> None:
+    async def scenario(db: AsyncSession) -> None:
+        subject = await get_or_create_subject(db, "french")
+        vision = FakeVisionProvider(transcription="Diagramme illustrant la conjugaison du present.")
+
+        result = await ingest_pdf(
+            db,
+            FakeEmbeddingProvider(),
+            vision,
+            FakeVectorStore(),
+            subject_id=subject.id,
+            filename="chapter5.pdf",
+            pdf_bytes=_build_test_pdf(),
+        )
+
+        assert result.scanned_page_count == 1
+        image_bytes, media_type, _instructions = vision.calls[0]
+        assert media_type == "image/png"
+        assert image_bytes.startswith(b"\x89PNG")
+
+    run(scenario)

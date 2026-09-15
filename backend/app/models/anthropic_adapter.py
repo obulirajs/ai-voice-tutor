@@ -21,6 +21,14 @@ class AnthropicProvider(ModelProvider):
         self._model = model
         self._client = client or anthropic.Anthropic(api_key=api_key)
 
+    @property
+    def provider_name(self) -> str:
+        return "anthropic"
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def generate(
         self,
         messages: list[Message],
