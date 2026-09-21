@@ -1,19 +1,26 @@
 """Ingestion module — upload handling, OCR/vision, and structure-aware chunking.
 
-Public surface: ingest_pdf() (the full pipeline), IngestResult, and the
-upload-validation helpers (looks_like_pdf, compute_content_hash,
-open_validated_pdf, InvalidPdfError) callers should run before invoking
-ingest_pdf. Depends on app.models' and app.knowledge's interfaces only,
-never a concrete adapter — see technical-design.md's dependency-inversion
-convention. Retrieval-quality checking (both the automatic post-ingestion
-consistency check and the standalone golden-question endpoint) lives in
-app.knowledge, not here — see IngestResult.consistency_check and
-app.knowledge.golden_qa.
+Public surface: ingest_pdf() (the full pipeline), IngestResult (including
+its per-page PageQualitySummary/quality_warning -- see pipeline.py and
+app.ingestion.pdf.TextQualityResult), and the upload-validation helpers
+(looks_like_pdf, compute_content_hash, open_validated_pdf, InvalidPdfError)
+callers should run before invoking ingest_pdf. Depends on app.models' and
+app.knowledge's interfaces only, never a concrete adapter — see
+technical-design.md's dependency-inversion convention. Retrieval-quality
+checking (both the automatic post-ingestion consistency check and the
+standalone golden-question endpoint) lives in app.knowledge, not here —
+see IngestResult.consistency_check and app.knowledge.golden_qa.
 """
 
 from __future__ import annotations
 
-from .pipeline import IngestResult, collection_for_subject, ingest_pdf
+from .pdf import TextQualityResult
+from .pipeline import (
+    IngestResult,
+    PageQualitySummary,
+    collection_for_subject,
+    ingest_pdf,
+)
 from .validation import (
     InvalidPdfError,
     compute_content_hash,
@@ -24,6 +31,8 @@ from .validation import (
 __all__ = [
     "IngestResult",
     "InvalidPdfError",
+    "PageQualitySummary",
+    "TextQualityResult",
     "collection_for_subject",
     "compute_content_hash",
     "ingest_pdf",

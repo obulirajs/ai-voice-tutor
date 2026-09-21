@@ -13,12 +13,15 @@ from app.knowledge import (
     check_ingestion_consistency,
     check_subject_language_mismatch,
     detect_chunk_language,
+    get_retrieval_score_threshold,
+    get_retrieval_top_k,
     get_vector_store,
     parse_expected_page,
     run_golden_qa_check,
     summarize_golden_qa_results,
 )
 from app.knowledge import store as vec_store_sql
+from app.knowledge.retrieval import RetrievalService
 from app.knowledge.sqlite_vec_store import SqliteVecStore
 from app.models import EmbeddingProvider, EmbeddingResponse, Usage
 
@@ -446,3 +449,101 @@ def test_summarize_golden_qa_results_splits_by_type() -> None:
         assert summary.by_type["out-of-scope"].page_match_unknown == 1
 
     asyncio.run(scenario())
+
+
+# --- RetrievalService / get_retrieval_top_k / get_retrieval_score_threshold (Phase 3) ---
+
+
+def test_retrieval_service_returns_chunks_sorted_by_score_descending() -> None:
+    async def scenario() -> None:
+        store = _FixedResultsVectorStore(
+            [
+                SearchResult(text="far", document_id=1, page_number=1, distance=0.9),
+                SearchResult(text="near", document_id=1, page_number=2, distance=0.1),
+                SearchResult(text="mid", document_id=1, page_number=3, distance=0.5),
+            ]
+        )
+        service = RetrievalService(_FakeEmbeddingProvider(), store)
+
+        result = await service.retrieve("question", "subject_1", top_k=3)
+
+        assert [c.text for c in result.chunks] == ["near", "mid", "far"]
+        assert result.best_score == pytest.approx(0.9)
+
+    asyncio.run(scenario())
+
+
+def test_retrieval_service_respects_top_k() -> None:
+    async def scenario() -> None:
+        store = _FixedResultsVectorStore(
+            [SearchResult(text=f"chunk {i}", document_id=1, page_number=i, distance=0.1 * i) for i in range(5)]
+        )
+        service = RetrievalService(_FakeEmbeddingProvider(), store)
+
+        result = await service.retrieve("question", "subject_1", top_k=2)
+
+        assert len(result.chunks) == 2
+
+    asyncio.run(scenario())
+
+
+def test_retrieval_service_best_score_is_zero_for_no_hits() -> None:
+    async def scenario() -> None:
+        service = RetrievalService(_FakeEmbeddingProvider(), _FixedResultsVectorStore([]))
+
+        result = await service.retrieve("question", "subject_1")
+
+        assert result.chunks == []
+        assert result.best_score == 0.0
+
+    asyncio.run(scenario())
+
+
+def test_retrieval_service_maps_score_from_distance_and_preserves_metadata() -> None:
+    async def scenario() -> None:
+        store = _FixedResultsVectorStore([SearchResult(text="x", document_id=7, page_number=42, distance=0.25)])
+        service = RetrievalService(_FakeEmbeddingProvider(), store)
+
+        result = await service.retrieve("question", "subject_1")
+
+        assert result.chunks[0].score == pytest.approx(0.75)  # 1 - distance
+        assert result.chunks[0].page_number == 42
+        assert result.chunks[0].document_id == 7
+
+    asyncio.run(scenario())
+
+
+def test_retrieval_service_reports_query_embedding_usage() -> None:
+    async def scenario() -> None:
+        store = _FixedResultsVectorStore([SearchResult(text="x", document_id=1, page_number=1, distance=0.2)])
+        service = RetrievalService(_FakeEmbeddingProvider(), store)
+
+        result = await service.retrieve("question", "subject_1")
+
+        assert result.query_embedding_usage.usage == Usage()
+
+    asyncio.run(scenario())
+
+
+def test_get_retrieval_top_k_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RETRIEVAL_TOP_K", raising=False)
+
+    assert get_retrieval_top_k() == 5
+
+
+def test_get_retrieval_top_k_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_TOP_K", "8")
+
+    assert get_retrieval_top_k() == 8
+
+
+def test_get_retrieval_score_threshold_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RETRIEVAL_SCORE_THRESHOLD", raising=False)
+
+    assert get_retrieval_score_threshold() == pytest.approx(0.55)
+
+
+def test_get_retrieval_score_threshold_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_SCORE_THRESHOLD", "0.5")
+
+    assert get_retrieval_score_threshold() == pytest.approx(0.5)

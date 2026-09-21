@@ -33,6 +33,7 @@ class AnthropicProvider(ModelProvider):
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
     ) -> ModelResponse:
         system, turns = _split_system(messages)
 
@@ -45,6 +46,8 @@ class AnthropicProvider(ModelProvider):
             kwargs["system"] = system
         if tools:
             kwargs["tools"] = tools
+        if temperature is not None:
+            kwargs["temperature"] = temperature
 
         result = self._client.messages.create(**kwargs)
 

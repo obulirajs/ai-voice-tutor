@@ -2,11 +2,17 @@
 
 Public surface: the `VectorStore` interface, its `Chunk`/`SearchResult`
 types, `get_vector_store()` (reads VECTOR_STORE from the environment and
-returns the configured adapter), the automatic post-ingestion
-`check_ingestion_consistency()` and `check_subject_language_mismatch()`,
-and the standalone, read-only `run_golden_qa_check()`. Callers (ingestion,
-api) must depend on these, never import `SqliteVecStore` directly — the
-same dependency-inversion convention as app.models' ModelProvider/get_provider().
+returns the configured adapter), `RetrievalService` (embeds a question and
+returns scored, grounded chunks — see `retrieval.py` for its config
+getters), the automatic post-ingestion `check_ingestion_consistency()` and
+`check_subject_language_mismatch()`, and the standalone, read-only
+`run_golden_qa_check()`. Callers (ingestion, orchestration, api) must depend
+on these, never import `SqliteVecStore` directly — the same
+dependency-inversion convention as app.models' ModelProvider/get_provider().
+
+Note: `retrieval.RetrievedChunk` is deliberately not re-exported here — the
+name `RetrievedChunk` below is golden_qa's (a distinct, lighter type).
+Import the retrieval one from `app.knowledge.retrieval` directly.
 """
 
 from __future__ import annotations
@@ -30,6 +36,12 @@ from .golden_qa import (
     summarize_golden_qa_results,
 )
 from .language_check import check_subject_language_mismatch, detect_chunk_language
+from .retrieval import (
+    RetrievalResult,
+    RetrievalService,
+    get_retrieval_score_threshold,
+    get_retrieval_top_k,
+)
 from .sqlite_vec_store import SqliteVecStore
 
 __all__ = [
@@ -39,6 +51,8 @@ __all__ = [
     "GoldenQASummary",
     "GoldenQuestion",
     "GoldenQuestionResult",
+    "RetrievalResult",
+    "RetrievalService",
     "RetrievedChunk",
     "SearchResult",
     "TypeSummary",
@@ -46,6 +60,8 @@ __all__ = [
     "check_ingestion_consistency",
     "check_subject_language_mismatch",
     "detect_chunk_language",
+    "get_retrieval_score_threshold",
+    "get_retrieval_top_k",
     "get_vector_store",
     "parse_expected_page",
     "run_golden_qa_check",

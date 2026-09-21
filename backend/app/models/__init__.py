@@ -19,6 +19,7 @@ from .embedding_base import EmbeddingProvider, EmbeddingResponse
 from .ollama_adapter import OllamaProvider
 from .ollama_embedding_adapter import OllamaEmbeddingProvider
 from .pricing import estimate_cost_usd
+from .tesseract_vision_adapter import TesseractVisionProvider
 from .vision_base import VisionProvider, VisionResponse
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "Message",
     "ModelProvider",
     "ModelResponse",
+    "TesseractVisionProvider",
     "Usage",
     "VisionProvider",
     "VisionResponse",
@@ -75,9 +77,23 @@ def get_embedding_provider() -> EmbeddingProvider:
     raise ValueError(f"Unknown EMBEDDING_PROVIDER: {provider!r} (expected 'ollama')")
 
 
+_DEFAULT_VISION_PROVIDER = "tesseract"
+
+
 def get_vision_provider() -> VisionProvider:
-    """Build the vision adapter configured via the VISION_PROVIDER env var."""
-    provider = os.getenv("VISION_PROVIDER", "anthropic").lower()
+    """Build the vision adapter configured via the VISION_PROVIDER env var.
+
+    Tesseract (free, local OCR) is the default -- see
+    tesseract_vision_adapter.py. Anthropic's vision API remains available
+    as an opt-in for pages Tesseract handles poorly (complex diagrams), at
+    real per-page API cost.
+    """
+    provider = os.getenv("VISION_PROVIDER", _DEFAULT_VISION_PROVIDER).lower()
+
+    if provider == "tesseract":
+        langs = os.getenv("TESSERACT_LANGS", "eng+fra")
+        tesseract_cmd = os.getenv("TESSERACT_CMD") or None
+        return TesseractVisionProvider(langs=langs, tesseract_cmd=tesseract_cmd)
 
     if provider == "anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -88,4 +104,4 @@ def get_vision_provider() -> VisionProvider:
             api_key=api_key,
         )
 
-    raise ValueError(f"Unknown VISION_PROVIDER: {provider!r} (expected 'anthropic')")
+    raise ValueError(f"Unknown VISION_PROVIDER: {provider!r} (expected 'tesseract' or 'anthropic')")

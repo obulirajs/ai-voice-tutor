@@ -1,0 +1,128 @@
+.voice-button-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.voice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-bg-input);
+  color: var(--color-accent);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.voice-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent-hover);
+}
+
+.voice-button:disabled {
+  cursor: not-allowed;
+}
+
+.voice-button--recording {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  animation: voice-recording-pulse 1.4s ease-out infinite;
+}
+
+/* Fills clockwise as VAD-detected silence approaches the auto-stop timeout --
+   a visual "the app noticed you stopped talking" cue (--silence-progress is
+   set inline from VoiceButton.tsx's useVoiceRecorder() state). */
+.voice-button--silence-ring {
+  animation: none;
+  background: conic-gradient(
+    var(--color-accent) calc(var(--silence-progress, 0) * 360deg),
+    var(--color-bg-input) calc(var(--silence-progress, 0) * 360deg)
+  );
+}
+
+.voice-button--processing {
+  color: var(--color-text-secondary);
+}
+
+.voice-button--playing {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  animation: voice-playing-pulse 1.6s ease-in-out infinite;
+}
+
+.voice-button--error {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 15%, var(--color-bg-input));
+}
+
+.voice-button--no-permission {
+  color: var(--color-text-muted);
+}
+
+.voice-button__spinner {
+  animation: voice-spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes voice-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes voice-recording-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-error) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-error) 0%, transparent);
+  }
+}
+
+@keyframes voice-playing-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent);
+  }
+}
+
+.voice-button__hint {
+  position: absolute;
+  bottom: calc(100% + var(--spacing-sm));
+  right: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: 220px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-chat);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  box-shadow: var(--shadow-sm);
+}
+
+.voice-button__hint--error {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+@media (max-width: 767px) {
+  .voice-button {
+    width: 44px;
+    height: 44px;
+  }
+}

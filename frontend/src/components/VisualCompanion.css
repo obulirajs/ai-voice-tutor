@@ -1,0 +1,290 @@
+.visual-companion {
+  display: flex;
+  flex: 0 0 40%;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg-chat);
+  transition: flex-basis 0.25s ease, background-color 0.4s ease;
+}
+
+.visual-companion--collapsed {
+  flex-basis: 56px;
+}
+
+.visual-companion--collapsed .visual-companion__body,
+.visual-companion--collapsed .visual-companion__header-title {
+  display: none;
+}
+
+.visual-companion--highlight {
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-chat));
+}
+
+.visual-companion__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.visual-companion--collapsed .visual-companion__header {
+  border-bottom: none;
+  justify-content: center;
+}
+
+.visual-companion__header-title {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.visual-companion__toggle {
+  padding: var(--spacing-xs);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.visual-companion__toggle:hover {
+  background: var(--color-bg-sidebar);
+  color: var(--color-accent);
+}
+
+.visual-companion__mobile-close {
+  display: none;
+}
+
+.visual-companion__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  overflow-y: auto;
+}
+
+.visual-companion__empty {
+  margin: auto;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.visual-companion__card {
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-input);
+  box-shadow: var(--shadow-sm);
+}
+
+.visual-companion__card--formula {
+  overflow-x: auto;
+  text-align: center;
+}
+
+.visual-companion__formula-fallback {
+  display: block;
+  padding: var(--spacing-xs);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.visual-companion__card--highlight {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-input));
+  color: var(--color-text);
+}
+
+.visual-companion__card--text-block {
+  margin: 0;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.visual-companion__card--text-block p {
+  margin: 0 0 var(--spacing-xs);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.visual-companion__card--text-block cite {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.visual-companion__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.visual-companion__section-title {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.visual-companion__terms {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.visual-companion__terms li {
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.visual-companion__terms li:last-child {
+  border-bottom: none;
+}
+
+.visual-companion__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.visual-companion__page-badge {
+  display: inline-block;
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-bg-input));
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.visual-companion__supplemented-note {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.visual-companion__backdrop {
+  display: none;
+}
+
+.visual-companion__mobile-toggle {
+  display: none;
+}
+
+/* Tablet: a collapsible drawer below the chat, not a side panel. */
+@media (max-width: 1024px) and (min-width: 768px) {
+  .visual-companion {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 45vh;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .visual-companion--collapsed {
+    flex-basis: auto;
+    max-height: 48px;
+  }
+}
+
+/* Mobile: hidden by default, a floating button opens it as an overlay. */
+@media (max-width: 767px) {
+  .visual-companion {
+    display: none;
+  }
+
+  .visual-companion--mobile-open {
+    display: flex;
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 40;
+    height: 65vh;
+    max-height: 65vh;
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-md);
+  }
+
+  .visual-companion--mobile-open.visual-companion--collapsed {
+    height: auto;
+  }
+
+  .visual-companion--mobile-open .visual-companion__body,
+  .visual-companion--mobile-open .visual-companion__header-title {
+    display: flex;
+  }
+
+  .visual-companion--mobile-open .visual-companion__toggle {
+    display: none;
+  }
+
+  .visual-companion__mobile-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xs);
+    border: none;
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: 1.25rem;
+    cursor: pointer;
+  }
+
+  .visual-companion__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    padding: 0;
+    border: none;
+    background: rgba(0, 0, 0, 0.35);
+    cursor: default;
+  }
+
+  .visual-companion__mobile-toggle {
+    display: flex;
+    position: fixed;
+    right: var(--spacing-lg);
+    bottom: calc(var(--spacing-lg) + 64px);
+    z-index: 36;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    font-size: 0.9rem;
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+  }
+
+  .visual-companion__mobile-toggle--pulse {
+    animation: visual-companion-pulse 1.5s ease-in-out;
+  }
+}
+
+@keyframes visual-companion-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}

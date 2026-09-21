@@ -47,5 +47,11 @@ class ModelProvider(ABC):
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
     ) -> ModelResponse:
+        """temperature: sampling temperature to pass to the underlying API.
+        None (the default) means the provider's own default behavior --
+        callers needing deterministic output (e.g. the qa-check endpoint's
+        eval loop) pass temperature=0 explicitly.
+        """
         raise NotImplementedError

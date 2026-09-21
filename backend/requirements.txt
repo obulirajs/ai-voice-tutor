@@ -9,3 +9,17 @@ anthropic>=0.34
 python-dotenv
 PyMuPDF>=1.24
 sqlite-vec>=0.1
+
+# Local OCR (ingestion's default vision provider -- see
+# app/models/tesseract_vision_adapter.py): needs the tesseract-ocr system
+# binary too, see README.md.
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# Voice I/O (Phase 5): ASR + TTS behind app.voice's interfaces.
+faster-whisper>=1.0
+edge-tts>=6.1
+# Piper's PyPI wheel is primarily Linux; if it fails to install on your
+# machine, skip it -- app.voice.tts_piper stays importable and TTS_PROVIDER
+# defaults to edge-tts (see .env.example).
+piper-tts>=1.2

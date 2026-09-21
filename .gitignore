@@ -20,6 +20,10 @@ htmlcov/
 # Golden-QA JSON fixtures in the same folder are fine to track.
 backend/textbooks_input/*.pdf
 
+# Downloaded voice models (Phase 5): Piper voices auto-download here;
+# faster-whisper caches its own models under ~/.cache/huggingface.
+backend/piper_voices/
+
 # Personal prompt-drafting workspace (not part of the repo layout)
 /Claude outputs/
 /claude-prompt/

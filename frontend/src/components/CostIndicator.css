@@ -1,0 +1,22 @@
+.cost-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.cost-indicator:hover {
+  background: var(--color-bg-sidebar);
+  color: var(--color-text-secondary);
+}
+
+.cost-indicator__value {
+  font-size: 0.75rem;
+}

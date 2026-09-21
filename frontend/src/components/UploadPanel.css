@@ -1,0 +1,185 @@
+.upload-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.upload-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: min(420px, 100%);
+  max-height: 90vh;
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-chat);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.upload-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-panel__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+}
+
+.upload-panel__close {
+  padding: 0 var(--spacing-xs);
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.upload-panel__close:hover {
+  color: var(--color-accent);
+}
+
+.upload-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.upload-panel__field input[type='text'] {
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-input);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+}
+
+.upload-panel__field input[type='text']:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+.upload-panel__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.upload-panel__dropzone--active {
+  border-color: var(--color-accent);
+  background: var(--color-bg-sidebar);
+}
+
+.upload-panel__dropzone-text {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.upload-panel__file-picker {
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.upload-panel__file-picker:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.upload-panel__progress {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.upload-panel__error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.85rem;
+}
+
+.upload-panel__submit {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.upload-panel__submit:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.upload-panel__submit:disabled {
+  /* See ChatView.css's send-button disabled rule for why opacity, not a
+     border/muted color swap -- that pair is unreadable in High-contrast. */
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-panel__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  font-size: 0.9rem;
+}
+
+.upload-panel__result-list {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  color: var(--color-text-secondary);
+}
+
+.upload-panel__warning {
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-warning);
+  /* Deliberate exception: --color-warning is always a yellow/amber hue, so
+     dark text stays readable on it across all three themes -- unlike
+     --color-text, which flips to near-white in Dark/High-contrast. */
+  color: #1c1a17;
+  font-size: 0.85rem;
+}
+
+.upload-panel__done {
+  align-self: flex-start;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-accent);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.upload-panel__done:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}

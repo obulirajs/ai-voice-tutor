@@ -1,0 +1,17 @@
+.math-text__inline {
+  display: inline-block;
+}
+
+.math-text__display {
+  display: block;
+  margin: var(--spacing-xs) 0;
+  overflow-x: auto;
+}
+
+.math-text__fallback {
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}

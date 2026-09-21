@@ -1,0 +1,139 @@
+/*
+ * Design tokens -- the "Calm & Focused" aesthetic from docs/technical-design.md:
+ * warm neutrals, a serif/sans pairing, generous whitespace. Components read
+ * these custom properties; they never hardcode colors/fonts/spacing.
+ *
+ * Three presets ship: Light (default, defined on bare :root), Dark, and
+ * High-contrast, each also exposed as an explicit [data-theme="..."]
+ * override so ThemeContext can set the attribute and always get a match.
+ */
+
+:root {
+  --color-bg: #faf7f2;
+  --color-bg-sidebar: #f3eee6;
+  --color-bg-chat: #fffdf9;
+  --color-bg-input: #ffffff;
+
+  --color-text: #2b2520;
+  --color-text-secondary: #5c5347;
+  --color-text-muted: #8a8072;
+
+  --color-border: #e3dbcc;
+
+  --color-accent: #b5651d;
+  --color-accent-hover: #a6521f;
+  --color-accent-text: #ffffff;
+
+  --color-user-bubble: #b5651d;
+  --color-user-bubble-text: #ffffff;
+  --color-assistant-bubble: #ffffff;
+  --color-assistant-bubble-text: #2b2520;
+
+  --color-success: #3f7d4e;
+  --color-warning: #b8862d;
+  --color-error: #b23a2e;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 40px;
+}
+
+:root[data-theme='light'] {
+  --color-bg: #faf7f2;
+  --color-bg-sidebar: #f3eee6;
+  --color-bg-chat: #fffdf9;
+  --color-bg-input: #ffffff;
+
+  --color-text: #2b2520;
+  --color-text-secondary: #5c5347;
+  --color-text-muted: #8a8072;
+
+  --color-border: #e3dbcc;
+
+  --color-accent: #b5651d;
+  --color-accent-hover: #a6521f;
+  --color-accent-text: #ffffff;
+
+  --color-user-bubble: #b5651d;
+  --color-user-bubble-text: #ffffff;
+  --color-assistant-bubble: #ffffff;
+  --color-assistant-bubble-text: #2b2520;
+
+  --color-success: #3f7d4e;
+  --color-warning: #b8862d;
+  --color-error: #b23a2e;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #1c1a17;
+  --color-bg-sidebar: #242019;
+  --color-bg-chat: #1f1d19;
+  --color-bg-input: #2a2620;
+
+  --color-text: #ede7dd;
+  --color-text-secondary: #b9af9e;
+  --color-text-muted: #857c6e;
+
+  --color-border: #3a352c;
+
+  --color-accent: #e08a47;
+  --color-accent-hover: #f0a164;
+  --color-accent-text: #1c1a17;
+
+  --color-user-bubble: #e08a47;
+  --color-user-bubble-text: #1c1a17;
+  --color-assistant-bubble: #2a2620;
+  --color-assistant-bubble-text: #ede7dd;
+
+  --color-success: #6fbf7c;
+  --color-warning: #e0b24d;
+  --color-error: #e2685a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='high-contrast'] {
+  --color-bg: #000000;
+  --color-bg-sidebar: #000000;
+  --color-bg-chat: #000000;
+  --color-bg-input: #0a0a0a;
+
+  --color-text: #ffffff;
+  --color-text-secondary: #ffffff;
+  --color-text-muted: #cccccc;
+
+  --color-border: #ffffff;
+
+  --color-accent: #ffd400;
+  --color-accent-hover: #ffe45c;
+  --color-accent-text: #000000;
+
+  --color-user-bubble: #ffd400;
+  --color-user-bubble-text: #000000;
+  --color-assistant-bubble: #000000;
+  --color-assistant-bubble-text: #ffffff;
+
+  --color-success: #00ff00;
+  --color-warning: #ffd400;
+  --color-error: #ff5555;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+}

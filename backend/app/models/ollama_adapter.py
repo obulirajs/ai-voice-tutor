@@ -26,10 +26,13 @@ class OllamaProvider(ModelProvider):
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
         if tools:
             kwargs["tools"] = tools
+        if temperature is not None:
+            kwargs["options"] = {"temperature": temperature}
 
         result = self._client.chat(**kwargs)
         message = result["message"]

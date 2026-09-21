@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -35,7 +36,9 @@ from app.storage import (
     get_document,
     get_document_by_hash,
     get_or_create_subject,
+    get_subject,
     get_subject_by_name,
+    list_documents,
 )
 
 router = APIRouter()
@@ -67,6 +70,17 @@ class ConsistencyCheckResponse(BaseModel):
     failed: list[ConsistencyCheckFailureResponse]
 
 
+class QualitySummaryResponse(BaseModel):
+    total_pages: int
+    good_pages: int
+    poor_pages: int
+    empty_pages: int
+    ocr_fallback_pages: int
+    avg_score: float
+    worst_page: int | None
+    worst_score: float
+
+
 class DocumentIngestResponse(BaseModel):
     document_id: int
     page_count: int
@@ -74,6 +88,8 @@ class DocumentIngestResponse(BaseModel):
     chunk_count: int
     consistency_check: ConsistencyCheckResponse
     subject_mismatch_warning: str | None = None
+    quality_summary: QualitySummaryResponse | None = None
+    quality_warning: str | None = None
 
 
 @router.post("/subjects/{subject}/documents", response_model=DocumentIngestResponse)
@@ -160,7 +176,52 @@ async def upload_document(
                 for f in result.consistency_check.failed
             ],
         ),
+        quality_summary=QualitySummaryResponse(
+            total_pages=result.quality_summary.total_pages,
+            good_pages=result.quality_summary.good_pages,
+            poor_pages=result.quality_summary.poor_pages,
+            empty_pages=result.quality_summary.empty_pages,
+            ocr_fallback_pages=result.quality_summary.ocr_fallback_pages,
+            avg_score=result.quality_summary.avg_score,
+            worst_page=result.quality_summary.worst_page,
+            worst_score=result.quality_summary.worst_score,
+        )
+        if result.quality_summary is not None
+        else None,
+        quality_warning=result.quality_warning,
     )
+
+
+class DocumentResponse(BaseModel):
+    id: int
+    filename: str
+    page_count: int
+    scanned_page_count: int
+    chunk_count: int
+    created_at: datetime
+
+
+@router.get("/subjects/{subject_id}/documents", response_model=list[DocumentResponse])
+async def list_subject_documents(
+    subject_id: int,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> list[DocumentResponse]:
+    subject_row = await get_subject(db, subject_id)
+    if subject_row is None:
+        raise HTTPException(status_code=404, detail=f"No subject with id {subject_id}")
+
+    documents = await list_documents(db, subject_id)
+    return [
+        DocumentResponse(
+            id=document.id,
+            filename=document.filename,
+            page_count=document.page_count,
+            scanned_page_count=document.scanned_page_count,
+            chunk_count=document.chunk_count,
+            created_at=document.created_at,
+        )
+        for document in documents
+    ]
 
 
 @router.delete("/subjects/{subject}/documents/{document_id}", status_code=204)

@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.ingestion import ingest_pdf
 from app.ingestion.chunking import chunk_text
-from app.ingestion.pdf import load_pdf, page_is_scanned
+from app.ingestion.pdf import garbled_text_ratio, load_pdf, page_is_scanned
 from app.knowledge import Chunk, SearchResult, VectorStore
 from app.models import (
     EmbeddingProvider,
@@ -223,6 +223,45 @@ def test_page_is_scanned_leaves_text_heavy_illustrated_page_as_text_layer() -> N
     document.close()
 
 
+def test_garbled_text_ratio_distinguishes_real_text_from_font_encoding_garbage() -> None:
+    """Regression coverage for the diagnose_retrieval.py finding: the NCERT
+    Science PDF's body text uses a Type3 font with no usable ToUnicode map,
+    so pymupdf decodes it to private-use/dingbat code points instead of
+    real characters."""
+    assert garbled_text_ratio("Bonjour, comment ca va aujourd'hui?") < 0.05
+    assert garbled_text_ratio("❙\x00✁✂✄\x00✂✶☎✆☎✝✞✟✠✡☛☞✠✌✍☛✍✡✎✏✡✑✒☞✠✌✍") > 0.9
+    assert garbled_text_ratio("") == 0.0
+
+
+class _FakeWordsPage:
+    """Minimal stand-in for pymupdf.Page covering only what page_is_scanned()
+    reads before its garbled-text check short-circuits (get_text()) -- a
+    real Type3-font-corrupted PDF page isn't something insert_text() can
+    reproduce (pymupdf substitutes a fallback glyph for codepoints missing
+    from the font instead of preserving them), so this fakes the extraction
+    result directly instead."""
+
+    def __init__(self, words: list[str]) -> None:
+        self._words = words
+
+    def get_text(self, option: str | None = None) -> object:
+        if option == "words":
+            return [(0.0, 0.0, 10.0, 10.0, word, 0, 0, index) for index, word in enumerate(self._words)]
+        return " ".join(self._words)
+
+
+def test_page_is_scanned_flags_garbled_font_encoded_text() -> None:
+    """A page whose text layer decodes to font-encoding garbage must be
+    flagged as needing OCR even though its word count clears
+    _MIN_WORDS_PER_PAGE -- the real-world case this heuristic was missing
+    before the diagnose_retrieval.py investigation.
+    """
+    garbled_words = ["❙", "✁✂✄", "☎✆✝✞✟", "✠✡☛☞✌", "✍✎✏✑✒"] * 10
+    page = _FakeWordsPage(garbled_words)
+
+    assert page_is_scanned(page) is True  # type: ignore[arg-type]
+
+
 def test_chunk_text_splits_on_paragraph_boundaries() -> None:
     text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
 
@@ -250,7 +289,10 @@ def test_chunk_text_returns_empty_list_for_blank_text() -> None:
 def test_ingest_pdf_extracts_text_page_directly_without_vision_call() -> None:
     async def scenario(db: AsyncSession) -> None:
         subject = await get_or_create_subject(db, "french")
-        vision = FakeVisionProvider(transcription="unused")
+        # A real placeholder sentence, not literally "unused" -- the quality
+        # gate now skips chunking a page whose text scores "empty" (fewer
+        # than 5 words), and a single word would otherwise trigger that.
+        vision = FakeVisionProvider(transcription="Diagramme illustrant la conjugaison du present.")
 
         result = await ingest_pdf(
             db,
@@ -407,6 +449,7 @@ def test_ingest_pdf_logs_usage_events_for_vision_and_embedding_calls() -> None:
 
         vision_events = [r for r in rows if r.provider == "fake" and r.model == "fake-vision"]
         assert len(vision_events) == 1
+        assert vision_events[0].event_type == "vision"
         assert vision_events[0].input_tokens == 200
         assert vision_events[0].output_tokens == 50
         assert vision_events[0].cost_usd == 0.0  # not in the pricing table, same as an unpriced Ollama model
@@ -414,6 +457,7 @@ def test_ingest_pdf_logs_usage_events_for_vision_and_embedding_calls() -> None:
 
         embedding_events = [r for r in rows if r.provider == "fake" and r.model == "fake-embed"]
         assert len(embedding_events) == 1
+        assert embedding_events[0].event_type == "embedding"
         assert embedding_events[0].input_tokens == result.chunk_count * 10
         assert embedding_events[0].output_tokens is None
         assert embedding_events[0].cost_usd == 0.0
