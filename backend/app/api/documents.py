@@ -4,15 +4,19 @@ import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
+from app.config import INGESTION_DEFAULTS
 from app.ingestion import (
     InvalidPdfError,
     compute_content_hash,
     ingest_pdf,
     looks_like_pdf,
     open_validated_pdf,
+    render_document_page_png,
 )
 from app.knowledge import (
     GoldenQASummary,
@@ -32,19 +36,22 @@ from app.models import (
 )
 from app.storage import (
     delete_document,
+    delete_document_files,
     get_db,
     get_document,
     get_document_by_hash,
+    get_document_pdf_path,
     get_or_create_subject,
+    get_page_cache_path,
     get_subject,
     get_subject_by_name,
     list_documents,
+    save_document_pdf,
 )
 
 router = APIRouter()
 
 _ALLOWED_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
-_DEFAULT_UPLOAD_MAX_SIZE_MB = 50
 
 # Simple in-memory guard against two concurrent ingestions for the same
 # subject -- adequate for this app's single-process, single-household scale
@@ -55,7 +62,7 @@ _ingesting_subjects: set[str] = set()
 
 
 def _upload_max_size_bytes() -> int:
-    max_mb = float(os.getenv("UPLOAD_MAX_SIZE_MB", str(_DEFAULT_UPLOAD_MAX_SIZE_MB)))
+    max_mb = float(os.getenv("UPLOAD_MAX_SIZE_MB", str(INGESTION_DEFAULTS.upload_max_size_mb)))
     return int(max_mb * 1024 * 1024)
 
 
@@ -162,6 +169,12 @@ async def upload_document(
     finally:
         _ingesting_subjects.discard(subject)
 
+    # Only reached if ingest_pdf succeeded -- a failed ingest must not leave
+    # a stored PDF for a document row that doesn't exist. Written outside
+    # the threadpool: this is one in-memory-bytes-to-disk write, not worth
+    # the dispatch overhead the page-render endpoint's actual CPU work needs.
+    save_document_pdf(result.document_id, pdf_bytes)
+
     return DocumentIngestResponse(
         document_id=result.document_id,
         page_count=result.page_count,
@@ -224,6 +237,53 @@ async def list_subject_documents(
     ]
 
 
+_PAGE_CACHE_CONTROL = f"public, max-age={24 * 60 * 60}"
+
+
+@router.get("/documents/{document_id}/pages/{page_number}.png")
+async def get_document_page_image(
+    document_id: int,
+    page_number: int,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> FileResponse:
+    """Renders one page of a stored PDF as a PNG for the Visual Companion's
+    page-view feature (clicking a "Page N" source badge). Not scoped under
+    /subjects/{subject} like the rest of this router -- both roles may call
+    it, and a source citation only carries a document_id, not a subject.
+
+    Cached to disk on first render (documents_dir/cache/<id>/<page>.png) and
+    served straight from there on later requests -- rendering is real CPU
+    work, not worth repeating for a page a student re-opens.
+    """
+    document = await get_document(db, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail=f"No document with id {document_id}")
+
+    if page_number < 1 or page_number > document.page_count:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Page {page_number} is out of range for document {document_id} ({document.page_count} pages)",
+        )
+
+    cache_path = get_page_cache_path(document_id, page_number)
+    if not cache_path.exists():
+        pdf_path = get_document_pdf_path(document_id)
+        if not pdf_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="This page isn't available -- re-upload the textbook to enable page view.",
+            )
+
+        pdf_bytes = await run_in_threadpool(pdf_path.read_bytes)
+        png_bytes = await run_in_threadpool(
+            render_document_page_png, pdf_bytes, page_number, INGESTION_DEFAULTS.page_view_dpi
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        await run_in_threadpool(cache_path.write_bytes, png_bytes)
+
+    return FileResponse(cache_path, media_type="image/png", headers={"Cache-Control": _PAGE_CACHE_CONTROL})
+
+
 @router.delete("/subjects/{subject}/documents/{document_id}", status_code=204)
 async def delete_document_endpoint(
     subject: str,
@@ -244,6 +304,7 @@ async def delete_document_endpoint(
 
     await vector_store.delete_document_chunks(document.collection, document.id)
     await delete_document(db, document.id)
+    delete_document_files(document.id)
 
 
 class GoldenQuestionRequest(BaseModel):

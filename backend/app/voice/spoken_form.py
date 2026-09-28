@@ -94,6 +94,22 @@ _LATEX_COMMANDS: dict[str, str] = {
 _BRACKET_CITATION = re.compile(r"\[\s*Passage\s+\d+\s*[-—]\s*page\s+\d+\s*\]", re.IGNORECASE)
 _PAREN_CITATION = re.compile(r"\(\s*p(?:age)?s?\.?\s*\d+(?:\s*[-–]\s*\d+)?\s*\)", re.IGNORECASE)
 
+# GFM-style markdown table (prompt_builder.py nudges the model toward these
+# for comparisons -- see app.orchestration.visual_directives, which renders
+# the same shape as a table card). Reading "|" characters aloud would be
+# nonsense, so a whole table block is swapped for one spoken summary line
+# instead of falling through to the word-level converters below. A row line
+# just needs at least one "|" to count; the separator line is the stricter
+# signal (dashes/colons only) that confirms it's really a table and not
+# prose that happens to contain a pipe.
+_TABLE_ROW_LINE = r"[ \t]*\|?.*\|.*\|?[ \t]*"
+_TABLE_SEPARATOR_LINE = r"[ \t]*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*"
+_MARKDOWN_TABLE = re.compile(
+    rf"^{_TABLE_ROW_LINE}\r?\n{_TABLE_SEPARATOR_LINE}\r?\n(?:{_TABLE_ROW_LINE}(?:\r?\n|$))+",
+    re.MULTILINE,
+)
+_TABLE_CELL_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
 _HEADING = re.compile(r"^#{1,6}\s+", re.MULTILINE)
 _BULLET = re.compile(r"^[ \t]*[-*+]\s+", re.MULTILINE)
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
@@ -118,16 +134,18 @@ _LEADING_TRAILING_WS = re.compile(r"^[ \t]+|[ \t]+$", re.MULTILINE)
 class SpokenFormPreprocessor:
     """Text-to-text transform applied to a reply before TTS.
 
-    Converts notation that would sound wrong read literally (LaTeX math
-    delimiters/commands, plain-text exponents, chemical subscripts, square
-    roots, fractions), strips formatting that's visual only (markdown,
-    source citations), and collapses blank lines (a paragraph break TTS
-    engines can otherwise treat as a truncation point). Doesn't aim for
-    perfect coverage -- unusual notation is just read literally, which is
-    an acceptable v1 gap (architecture.md's spoken-form preprocessor note).
+    Converts notation that would sound wrong read literally (markdown
+    tables, LaTeX math delimiters/commands, plain-text exponents, chemical
+    subscripts, square roots, fractions), strips formatting that's visual
+    only (markdown, source citations), and collapses blank lines (a
+    paragraph break TTS engines can otherwise treat as a truncation point).
+    Doesn't aim for perfect coverage -- unusual notation is just read
+    literally, which is an acceptable v1 gap (architecture.md's spoken-form
+    preprocessor note).
     """
 
     def preprocess(self, text: str) -> str:
+        text = self._convert_tables(text)
         text = self._convert_latex(text)
         text = self._strip_citations(text)
         text = self._strip_markdown(text)
@@ -137,6 +155,23 @@ class SpokenFormPreprocessor:
         text = self._convert_fractions(text)
         text = self._convert_operators(text)
         return self._cleanup_whitespace(text)
+
+    def _convert_tables(self, text: str) -> str:
+        """Replaces each markdown table block with a short spoken summary
+        naming its columns -- runs first, before any other transform, so a
+        table's "|" and "---" separator never reach the word-level
+        converters below.
+        """
+        return _MARKDOWN_TABLE.sub(self._table_to_spoken, text)
+
+    def _table_to_spoken(self, match: re.Match[str]) -> str:
+        header_line = match.group(0).splitlines()[0]
+        cells = header_line.strip()
+        cells = cells.removeprefix("|")
+        cells = cells.removesuffix("|")
+        headers = [_TABLE_CELL_BOLD.sub(r"\1", cell).strip() for cell in cells.split("|")]
+        headers_text = ", ".join(header for header in headers if header)
+        return f"Here's a table comparing {headers_text}. It's shown on your screen.\n"
 
     def _convert_latex(self, text: str) -> str:
         """Unwrap $...$/$$...$$ math delimiters and convert the LaTeX inside

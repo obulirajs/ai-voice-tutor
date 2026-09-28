@@ -8,6 +8,7 @@ convention.
 from __future__ import annotations
 
 from .chat import router as chat_router
+from .diagram import router as diagram_router
 from .documents import router as documents_router
 from .parent import router as parent_router
 from .sessions import router as sessions_router
@@ -17,6 +18,7 @@ from .voice import router as voice_router
 
 __all__ = [
     "chat_router",
+    "diagram_router",
     "documents_router",
     "parent_router",
     "sessions_router",

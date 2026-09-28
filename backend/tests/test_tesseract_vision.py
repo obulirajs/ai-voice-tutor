@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import os
 import shutil
@@ -59,7 +60,7 @@ def test_tesseract_vision_provider_transcribes_simple_image() -> None:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
 
-    response = provider.transcribe_image(buf.getvalue(), "image/png", "transcribe this page")
+    response = asyncio.run(provider.transcribe_image(buf.getvalue(), "image/png", "transcribe this page"))
 
     assert "Hello" in response.text
     assert "World" in response.text
@@ -73,7 +74,7 @@ def test_tesseract_vision_provider_usage_is_always_zero() -> None:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
 
-    response = provider.transcribe_image(buf.getvalue(), "image/png", "transcribe this page")
+    response = asyncio.run(provider.transcribe_image(buf.getvalue(), "image/png", "transcribe this page"))
 
     assert response.usage.input_tokens == 0
     assert response.usage.output_tokens == 0

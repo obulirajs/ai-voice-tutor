@@ -7,6 +7,8 @@ from typing import Literal
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import ORCHESTRATION_DEFAULTS
+
 from .models import ChatSession, Document, Message, Subject, UsageEvent
 
 Period = Literal["day", "week", "month", "all"]
@@ -57,7 +59,9 @@ async def get_or_create_subject(db: AsyncSession, name: str) -> Subject:
     return subject
 
 
-async def create_session(db: AsyncSession, subject_id: int, mode: str = "textbook") -> ChatSession:
+async def create_session(
+    db: AsyncSession, subject_id: int, mode: str = ORCHESTRATION_DEFAULTS.default_teaching_mode
+) -> ChatSession:
     session = ChatSession(subject_id=subject_id, mode=mode)
     db.add(session)
     await db.flush()

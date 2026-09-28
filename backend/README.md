@@ -20,5 +20,19 @@ the `tesseract-ocr` system binary too -- `pip install` alone isn't enough:
     uvicorn app.main:app --reload
     # then open http://127.0.0.1:8000/health
 
+## Page view
+
+The Visual Companion's page-view feature (clicking a "Page N" source badge)
+renders pages from the *stored* PDF, not from the vector store -- documents
+uploaded before this feature existed have no stored PDF yet. Back-fill them
+once, without re-uploading, by hash-matching against
+`backend/textbooks_input/`:
+
+    cd backend && python -m scripts.import_existing_pdfs
+
+Add `--dry-run` to preview matches without copying files. Any document the
+script reports as "no match" needs a real re-upload (delete + re-upload the
+same subject/file) to get page view.
+
 ## Test
     pytest

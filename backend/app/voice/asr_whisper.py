@@ -6,16 +6,12 @@ import os
 import tempfile
 from typing import TYPE_CHECKING
 
+from app.config import VOICE_DEFAULTS
+
 from .base import ASRProvider, TranscriptionResult
 
 if TYPE_CHECKING:
     from faster_whisper import WhisperModel
-
-_DEFAULT_MODEL_SIZE = "base"
-_DEFAULT_DEVICE = "cpu"
-# Greedy decoding -- fine for conversational speech and meaningfully faster
-# than the library's beam_size=5 default on a CPU-only machine.
-_BEAM_SIZE = 1
 
 
 class FasterWhisperAdapter(ASRProvider):
@@ -26,8 +22,8 @@ class FasterWhisperAdapter(ASRProvider):
 
     def __init__(
         self,
-        model_size: str = _DEFAULT_MODEL_SIZE,
-        device: str = _DEFAULT_DEVICE,
+        model_size: str = VOICE_DEFAULTS.whisper_model_size,
+        device: str = VOICE_DEFAULTS.whisper_device,
         model: WhisperModel | None = None,
     ) -> None:
         self._model_size = model_size
@@ -74,7 +70,9 @@ class FasterWhisperAdapter(ASRProvider):
                 tmp_file.write(audio_data)
                 tmp_path = tmp_file.name
 
-            segments_iter, info = model.transcribe(tmp_path, language=language_hint, beam_size=_BEAM_SIZE)
+            segments_iter, info = model.transcribe(
+                tmp_path, language=language_hint, beam_size=VOICE_DEFAULTS.whisper_beam_size
+            )
             segments = list(segments_iter)
         except Exception as exc:
             raise RuntimeError(f"faster-whisper failed to transcribe audio: {exc}") from exc

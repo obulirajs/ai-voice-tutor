@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.config import KNOWLEDGE_DEFAULTS
 from app.models import EmbeddingProvider, EmbeddingResponse
 
 from .base import VectorStore
@@ -29,13 +30,10 @@ __all__ = [
     "get_retrieval_top_k",
 ]
 
-_DEFAULT_RETRIEVAL_TOP_K = 5
-_DEFAULT_RETRIEVAL_SCORE_THRESHOLD = 0.55
-
 
 def get_retrieval_top_k() -> int:
     """Default number of chunks to retrieve, from the RETRIEVAL_TOP_K env var."""
-    return int(os.getenv("RETRIEVAL_TOP_K", str(_DEFAULT_RETRIEVAL_TOP_K)))
+    return int(os.getenv("RETRIEVAL_TOP_K", str(KNOWLEDGE_DEFAULTS.retrieval_top_k)))
 
 
 def get_retrieval_score_threshold() -> float:
@@ -43,7 +41,7 @@ def get_retrieval_score_threshold() -> float:
     the RETRIEVAL_SCORE_THRESHOLD env var — the grounding guardrail's
     "nothing good enough was found" cutoff, applied by orchestration.
     """
-    return float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", str(_DEFAULT_RETRIEVAL_SCORE_THRESHOLD)))
+    return float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", str(KNOWLEDGE_DEFAULTS.retrieval_score_threshold)))
 
 
 @dataclass(frozen=True)
@@ -68,8 +66,13 @@ class RetrievalService:
         self._embedding_provider = embedding_provider
         self._vector_store = vector_store
 
-    async def retrieve(self, query: str, collection: str, top_k: int = _DEFAULT_RETRIEVAL_TOP_K) -> RetrievalResult:
-        embedding_response = self._embedding_provider.embed([query])
+    async def retrieve(
+        self, query: str, collection: str, top_k: int = KNOWLEDGE_DEFAULTS.retrieval_top_k
+    ) -> RetrievalResult:
+        # EmbeddingProvider.embed() is a genuine async network call -- it
+        # can't block the event loop (same reasoning as the
+        # ModelProvider.generate() call in app.orchestration.handle_turn).
+        embedding_response = await self._embedding_provider.embed([query])
         (query_embedding,) = embedding_response.embeddings
 
         hits = await self._vector_store.search(collection, query_embedding, top_k=top_k)

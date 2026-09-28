@@ -29,11 +29,12 @@ function ReplaySpinnerIcon() {
 // must not show the same 𝑓(x) formula glyph a real LaTeX expression would.
 function directiveIndicator(directives: VisualDirective[]): { glyph: string; title: string } {
   const types = new Set(directives.map((d) => d.directive_type))
-  if (types.has('supplemented')) return { glyph: '💡', title: 'Includes an example from outside the textbook — click to view Study Notes' }
-  if (types.has('formula')) return { glyph: '𝑓(x)', title: 'Has a formula — click to view Study Notes' }
-  if (types.has('highlight')) return { glyph: '✦', title: 'Has key terms — click to view Study Notes' }
-  if (types.has('text_block')) return { glyph: '❝', title: 'Has a cited passage — click to view Study Notes' }
-  return { glyph: '▦', title: 'Has visual content — click to view Study Notes' }
+  if (types.has('supplemented')) return { glyph: '💡', title: 'Includes an example from outside the textbook — click to view the Visual Companion' }
+  if (types.has('table')) return { glyph: '▦', title: 'Has a comparison table — click to view the Visual Companion' }
+  if (types.has('formula')) return { glyph: '𝑓(x)', title: 'Has a formula — click to view the Visual Companion' }
+  if (types.has('highlight')) return { glyph: '✦', title: 'Has key terms — click to view the Visual Companion' }
+  if (types.has('text_block')) return { glyph: '❝', title: 'Has a cited passage — click to view the Visual Companion' }
+  return { glyph: '🖼', title: 'Has visual content — click to view the Visual Companion' }
 }
 
 export function ChatView() {
@@ -51,6 +52,9 @@ export function ChatView() {
   const openUploadPanel = useAppStore((state) => state.openUploadPanel)
   const playMessageAudio = useAppStore((state) => state.playMessageAudio)
   const activePlaybackIndex = useAppStore((state) => state.activePlaybackIndex)
+  const viewTextbookPage = useAppStore((state) => state.viewTextbookPage)
+  const stopSpeaking = useAppStore((state) => state.stopSpeaking)
+  const cancelVoiceTurn = useAppStore((state) => state.cancelVoiceTurn)
 
   const [draft, setDraft] = useState('')
   const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set())
@@ -83,13 +87,16 @@ export function ChatView() {
     })
   }
 
-  // Voice and typed chat can't run at the same time in v1 -- once a voice
-  // turn is transcribing/generating/speaking, the text input steps aside.
-  const voiceBusy = voiceState === 'processing' || voiceState === 'playing'
+  // Typing is fine while the tutor speaks -- only a voice turn actually
+  // being transcribed/generated blocks the text input (sending mid-reply
+  // would race the same session/message list a voice turn is about to update).
+  const voiceBusy = voiceState === 'processing'
 
   const handleSend = () => {
     const text = draft.trim()
     if (!text || isLoading || voiceBusy) return
+    // Sending stops any current playback first, same as starting a recording does.
+    if (voiceState === 'playing') stopSpeaking()
     setDraft('')
     void sendMessage(text)
   }
@@ -158,6 +165,12 @@ export function ChatView() {
             const hasDirectives = Boolean(message.visual_directives && message.visual_directives.length > 0)
             const indicator = hasDirectives ? directiveIndicator(message.visual_directives ?? []) : null
             const isActive = isAssistant && index === effectiveActiveIndex
+            // Which face the 🔊 button shows: this message's own
+            // cancel-synthesis / stop-playback state, or the plain "play"
+            // state (disabled only while a voice turn owns voiceState
+            // entirely -- recording, or a different message synthesizing).
+            const isThisProcessing = activePlaybackIndex === index && voiceState === 'processing'
+            const isThisPlaying = activePlaybackIndex === index && voiceState === 'playing'
 
             return (
             <div
@@ -186,7 +199,38 @@ export function ChatView() {
                     {indicator.glyph}
                   </span>
                 )}
-                {isAssistant && (
+                {isAssistant && isThisProcessing && (
+                  <button
+                    type="button"
+                    className="chat-message__replay"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      cancelVoiceTurn()
+                    }}
+                    title="Cancel"
+                    aria-label="Cancel synthesizing audio"
+                  >
+                    <ReplaySpinnerIcon />
+                    <span className="chat-message__replay-cancel" aria-hidden="true">
+                      ✕
+                    </span>
+                  </button>
+                )}
+                {isAssistant && isThisPlaying && (
+                  <button
+                    type="button"
+                    className="chat-message__replay"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      stopSpeaking()
+                    }}
+                    title="Stop"
+                    aria-label="Stop reading this response aloud"
+                  >
+                    ⏹
+                  </button>
+                )}
+                {isAssistant && !isThisProcessing && !isThisPlaying && (
                   <button
                     type="button"
                     className="chat-message__replay"
@@ -194,11 +238,11 @@ export function ChatView() {
                       event.stopPropagation()
                       void playMessageAudio(index)
                     }}
-                    disabled={voiceState === 'playing' || voiceState === 'processing'}
+                    disabled={voiceState === 'recording' || voiceState === 'processing'}
                     title="Read aloud"
                     aria-label="Read this response aloud"
                   >
-                    {voiceState === 'processing' && activePlaybackIndex === index ? <ReplaySpinnerIcon /> : '🔊'}
+                    🔊
                   </button>
                 )}
               </p>
@@ -214,9 +258,28 @@ export function ChatView() {
                   {expandedSources.has(index) && (
                     <span className="chat-message__sources-list">
                       Sources:{' '}
-                      {message.sources
-                        .map((source) => `p.${source.page_number ?? '?'} (${source.score.toFixed(2)})`)
-                        .join(', ')}
+                      {message.sources.map((source, sourceIndex) => (
+                        <span key={sourceIndex}>
+                          {sourceIndex > 0 && ', '}
+                          {source.document_id !== null && source.page_number !== null ? (
+                            <button
+                              type="button"
+                              className="chat-message__source-link"
+                              title="View textbook page"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                viewTextbookPage(index, source.document_id as number, source.page_number as number)
+                              }}
+                            >
+                              PDF page {source.page_number} ({source.score.toFixed(2)})
+                            </button>
+                          ) : (
+                            <>
+                              PDF page {source.page_number ?? '?'} ({source.score.toFixed(2)})
+                            </>
+                          )}
+                        </span>
+                      ))}
                     </span>
                   )}
                 </div>

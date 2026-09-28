@@ -11,6 +11,7 @@ import {
   getSubjects,
   getSubjectSessions,
   NetworkError,
+  requestDiagram,
   setRole as setApiRole,
   synthesizeSpeech,
   VoiceClient,
@@ -25,7 +26,8 @@ import type {
   VisualDirective,
   VoiceOption,
 } from './api'
-import { playAudioBlob } from './hooks/useAudioPlayer'
+import { parseMermaidDiagram } from './diagram'
+import { playAudioBlob, stopAudioPlayback } from './hooks/useAudioPlayer'
 import type { Theme } from './theme'
 
 export interface ChatMessage {
@@ -39,8 +41,35 @@ export interface ChatMessage {
   audioBlob?: Blob
 }
 
+// A click on a "Page N" source badge (ChatView's sources list, or the
+// Visual Companion's Study Notes tab) -- the Visuals tab renders this as a
+// "Textbook page" card. requestId is a monotonic counter, not a value the
+// badge itself carries: VisualCompanion uses it to detect a genuinely new
+// click (vs. a re-render) and switch to the Visuals tab exactly once per
+// click, even if the same page is clicked twice in a row.
+export interface PageViewRequest {
+  requestId: number
+  messageIndex: number
+  documentId: number
+  pageNumber: number
+}
+
+// One assistant message's on-demand "Draw diagram" state (Visual
+// Companion's Visuals tab, DiagramCard) -- keyed by message index in
+// AppState.diagramsByMessageIndex, same pattern as pageView, so switching
+// back to an already-drawn message shows it instantly instead of
+// re-requesting.
+export type DiagramStatus = 'idle' | 'loading' | 'ready' | 'failed' | 'not_applicable'
+
+export interface DiagramState {
+  status: DiagramStatus
+  mermaid?: string
+  error?: string
+}
+
 const ROLE_STORAGE_KEY = 'project-tutor:role'
 const VOICE_STORAGE_KEY = 'project-tutor:voice'
+const INTERRUPT_BY_SPEAKING_STORAGE_KEY = 'project-tutor:interrupt-by-speaking'
 
 function readStoredRole(): Role {
   try {
@@ -58,6 +87,14 @@ function readStoredVoice(): string | null {
   }
 }
 
+function readStoredInterruptBySpeaking(): boolean {
+  try {
+    return localStorage.getItem(INTERRUPT_BY_SPEAKING_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
 export type VoiceState = 'idle' | 'recording' | 'processing' | 'playing' | 'error'
 
 interface SendMessageOptions {
@@ -70,6 +107,30 @@ interface SendMessageOptions {
 // state itself since it's an imperative resource, not serializable data.
 const voiceClient = new VoiceClient()
 const VOICE_ERROR_RESET_DELAY_MS = 3000
+
+// PageViewRequest.requestId's source -- module-level like voiceClient,
+// since it's a monotonic counter, not serializable state.
+let pageViewRequestCounter = 0
+
+// diagramVoiceRequest's requestId source -- same pattern as pageViewRequestCounter.
+let diagramVoiceRequestCounter = 0
+
+// Each sendVoiceAudio() call captures the current value; cancelVoiceTurn()
+// bumps it. When the backend's response for a bumped-past turn finally
+// arrives, sendVoiceAudio notices its captured id no longer matches and
+// skips playback/voiceState -- the turn was interrupted, but its text
+// still gets appended (see cancelVoiceTurn's doc comment below).
+let currentVoiceTurnId = 0
+// The in-flight replay-synthesis fetch (playMessageAudio's synthesizeSpeech
+// call), if any -- cancelVoiceTurn() aborts it. Module-level like
+// voiceClient/currentVoiceTurnId: an imperative handle, not serializable state.
+let activeReplayAbortController: AbortController | null = null
+
+// The in-flight drawDiagram() request, if any -- module-level like the
+// handles above. Aborted when a new drawDiagram() call starts for a
+// different message, so switching which message is active before a slow
+// diagram call finishes doesn't let a stale response land later.
+let activeDiagramRequest: { messageIndex: number; controller: AbortController } | null = null
 
 interface AppState {
   subjects: Subject[]
@@ -84,6 +145,24 @@ interface AppState {
   // null means "follow the latest assistant message" -- the Visual
   // Companion's default; set by clicking an older message in ChatView.
   activeMessageIndex: number | null
+  // The active "Page N" badge click, if any -- cleared when the active
+  // message changes (see VisualCompanion.tsx). null when no page is
+  // currently requested for display.
+  pageView: PageViewRequest | null
+  // On-demand diagram state per assistant message index (see DiagramState) --
+  // absent entries are equivalent to 'idle' (never requested).
+  diagramsByMessageIndex: Record<number, DiagramState>
+  // Set when a voice "draw a diagram" command resolves against a real prior
+  // answer -- VisualCompanion.tsx reacts to a new requestId (same "react
+  // once per click" pattern as PageViewRequest) by switching to the Visuals
+  // tab and expanding the panel, since the student didn't click anything to
+  // open it themselves. null otherwise.
+  diagramVoiceRequest: { requestId: number; messageIndex: number } | null
+  // Whether the Visual Companion's page-view lightbox is open -- lifted
+  // into the store (rather than TextbookPageCard's own local state) so
+  // VoiceButton's Esc handler can defer to it ("let the lightbox handle
+  // Esc first" instead of also interrupting voice on the same keypress).
+  isPageLightboxOpen: boolean
 
   // Documents fetched lazily as SubjectNav expands each subject.
   documentsBySubjectId: Record<number, Document[]>
@@ -111,6 +190,10 @@ interface AppState {
   // and on-demand replay/preview synthesis; null = provider default.
   selectedVoice: string | null
   availableVoices: VoiceOption[]
+  // Settings -> Voice's "Interrupt by speaking" toggle (default off,
+  // persisted) -- when on, VoiceButton opens a barge-in mic monitor while
+  // voiceState is 'playing'. See VoiceButton.tsx's BARGE_IN_* constants.
+  interruptBySpeaking: boolean
 
   loadSubjects: () => Promise<void>
   setActiveSubject: (subjectId: number | null) => void
@@ -120,6 +203,16 @@ interface AppState {
   setRole: (role: Role) => void
   setTeachingMode: (mode: TeachingMode) => void
   setActiveMessageIndex: (index: number | null) => void
+  viewTextbookPage: (messageIndex: number, documentId: number, pageNumber: number) => void
+  clearPageView: () => void
+  setPageLightboxOpen: (open: boolean) => void
+  // Draws (or re-draws, with force=true) a Mermaid diagram for one assistant
+  // message -- POSTs /api/diagram, validates the result in the browser via
+  // mermaid.parse(), and retries once with the parse error if that fails.
+  // A no-op if that message already has a non-idle, non-failed result and
+  // force isn't set (switching back to an already-drawn message shouldn't
+  // re-request it).
+  drawDiagram: (messageIndex: number, force?: boolean) => Promise<void>
   loadSubjectDocuments: (subjectId: number) => Promise<void>
   openUploadPanel: (subjectName?: string | null) => void
   closeUploadPanel: () => void
@@ -135,11 +228,61 @@ interface AppState {
   sendVoiceAudio: (audioBlob: Blob) => Promise<void>
   setVoiceState: (voiceState: VoiceState) => void
   setVoiceEnabled: (voiceEnabled: boolean) => void
+  // Stops whatever's currently playing (a voice-turn reply or a 🔊 replay)
+  // and goes idle. Safe to call in any state.
+  stopSpeaking: () => void
+  // Cancels a reply that's still being prepared: a live voice turn
+  // (sendVoiceAudio, waiting on ASR+chat+TTS) or a replay's on-demand
+  // synthesis (playMessageAudio). Safe to call in any state; a no-op if
+  // nothing is processing.
+  cancelVoiceTurn: () => void
 
   playMessageAudio: (messageIndex: number) => Promise<void>
   loadVoices: () => Promise<void>
   setSelectedVoice: (voiceId: string | null) => void
+  setInterruptBySpeaking: (value: boolean) => void
   previewVoice: (voiceId: string) => Promise<void>
+}
+
+// Runs one drawDiagram() attempt end-to-end: POST /api/diagram, then
+// mermaid.parse() the result in the browser, retrying once (with the parse
+// error fed back to the model) if parsing fails. Returns null if `signal`
+// was aborted partway through -- the caller must not commit stale state in
+// that case, since something newer already superseded this request.
+async function fetchAndValidateDiagram(
+  messageText: string,
+  sessionId: string | null,
+  signal: AbortSignal,
+): Promise<DiagramState | null> {
+  let previousError: string | null = null
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let response: Awaited<ReturnType<typeof requestDiagram>>
+    try {
+      response = await requestDiagram({ sessionId, messageText, previousError }, signal)
+    } catch (error) {
+      if (signal.aborted) return null
+      return {
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Something went wrong drawing that diagram.',
+      }
+    }
+    if (signal.aborted) return null
+
+    if (response.mermaid === null) {
+      return response.reason === 'not_applicable'
+        ? { status: 'not_applicable' }
+        : { status: 'failed', error: response.reason ?? undefined }
+    }
+
+    const parseError = await parseMermaidDiagram(response.mermaid)
+    if (signal.aborted) return null
+    if (parseError === null) return { status: 'ready', mermaid: response.mermaid }
+
+    previousError = parseError
+  }
+
+  return { status: 'failed', error: previousError ?? undefined }
 }
 
 const initialRole = readStoredRole()
@@ -155,6 +298,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   role: initialRole,
   teachingMode: 'textbook',
   activeMessageIndex: null,
+  pageView: null,
+  diagramsByMessageIndex: {},
+  diagramVoiceRequest: null,
+  isPageLightboxOpen: false,
 
   documentsBySubjectId: {},
   sessions: [],
@@ -173,6 +320,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activePlaybackIndex: null,
   selectedVoice: readStoredVoice(),
   availableVoices: [],
+  interruptBySpeaking: readStoredInterruptBySpeaking(),
 
   loadSubjects: async () => {
     try {
@@ -199,6 +347,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       voiceState: 'idle',
       voiceError: null,
       activeMessageIndex: null,
+      diagramsByMessageIndex: {},
       sessions: [],
     })
     if (subjectId !== null) void get().loadSessions()
@@ -269,6 +418,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setActiveMessageIndex: (index) => set({ activeMessageIndex: index }),
 
+  viewTextbookPage: (messageIndex, documentId, pageNumber) => {
+    pageViewRequestCounter += 1
+    set({ pageView: { requestId: pageViewRequestCounter, messageIndex, documentId, pageNumber } })
+  },
+
+  clearPageView: () => set({ pageView: null }),
+
+  setPageLightboxOpen: (open) => set({ isPageLightboxOpen: open }),
+
+  drawDiagram: async (messageIndex, force = false) => {
+    const state = get()
+    const message = state.messages[messageIndex]
+    if (!message || message.role !== 'assistant') return
+
+    const existing = state.diagramsByMessageIndex[messageIndex]
+    if (!force && existing && existing.status !== 'idle' && existing.status !== 'failed') return
+
+    // A different message's diagram is still in flight -- it's no longer
+    // the one the student is looking at, so drop it rather than let a late
+    // response land against the wrong message later.
+    if (activeDiagramRequest && activeDiagramRequest.messageIndex !== messageIndex) {
+      activeDiagramRequest.controller.abort()
+    }
+    const controller = new AbortController()
+    activeDiagramRequest = { messageIndex, controller }
+
+    set((current) => ({
+      diagramsByMessageIndex: { ...current.diagramsByMessageIndex, [messageIndex]: { status: 'loading' } },
+    }))
+
+    const result = await fetchAndValidateDiagram(message.content, get().sessionId, controller.signal)
+
+    if (activeDiagramRequest?.controller === controller) activeDiagramRequest = null
+    if (result === null) return // superseded by a newer request -- don't overwrite its state
+
+    set((current) => ({
+      diagramsByMessageIndex: { ...current.diagramsByMessageIndex, [messageIndex]: result },
+    }))
+  },
+
   loadSubjectDocuments: async (subjectId) => {
     try {
       const documents = await getSubjectDocuments(subjectId)
@@ -311,6 +500,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
         isLoading: false,
         activeMessageIndex: null,
+        diagramsByMessageIndex: {},
       })
       voiceClient.disconnect()
     } catch {
@@ -319,7 +509,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   startNewChat: () => {
-    set({ sessionId: null, messages: [], activeMessageIndex: null })
+    set({ sessionId: null, messages: [], activeMessageIndex: null, diagramsByMessageIndex: {} })
     voiceClient.disconnect()
   },
 
@@ -332,7 +522,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setVoiceEnabled: (voiceEnabled) => set({ voiceEnabled }),
 
+  stopSpeaking: () => {
+    stopAudioPlayback()
+    set({ voiceState: 'idle', activePlaybackIndex: null })
+  },
+
+  cancelVoiceTurn: () => {
+    // Supersedes any in-flight sendVoiceAudio turn -- its late response, if
+    // any, will notice currentVoiceTurnId moved past its own captured id.
+    currentVoiceTurnId += 1
+    if (activeReplayAbortController) {
+      activeReplayAbortController.abort()
+      activeReplayAbortController = null
+    }
+    set({ voiceState: 'idle', voiceError: null, activePlaybackIndex: null })
+  },
+
   sendVoiceAudio: async (audioBlob) => {
+    const turnId = ++currentVoiceTurnId
     set({ voiceState: 'processing', voiceError: null })
 
     const { activeSubjectId, subjects, sessionId, selectedVoice } = get()
@@ -344,6 +551,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const response = await voiceClient.sendAudio(audioBlob)
+      // cancelVoiceTurn() may have bumped currentVoiceTurnId past ours while
+      // we were waiting -- the student already interrupted (started a new
+      // recording, or just went idle). The transcription/reply still get
+      // appended as text below (nothing lost), but playback and voiceState
+      // are skipped: whatever the student did next already owns those.
+      const wasCancelled = turnId !== currentVoiceTurnId
 
       if (response.is_command && response.new_subject) {
         // A resolved subject switch -- fresh conversation under the new
@@ -364,6 +577,18 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeMessageIndex: null,
         })
       } else {
+        // Captured before the command's own reply is appended below -- for
+        // a "draw a diagram" command this is the real answer to diagram,
+        // not the "Drawing a diagram for you." confirmation that's about to
+        // become the new latest assistant message.
+        let priorLastAssistantIndex: number | null = null
+        for (let i = get().messages.length - 1; i >= 0; i -= 1) {
+          if (get().messages[i].role === 'assistant') {
+            priorLastAssistantIndex = i
+            break
+          }
+        }
+
         set((state) => ({
           messages: [
             ...state.messages,
@@ -379,12 +604,29 @@ export const useAppStore = create<AppState>((set, get) => ({
           sessionId: response.session_id,
           activeMessageIndex: null,
         }))
+
+        if (response.is_command && response.command_type === 'draw_diagram' && priorLastAssistantIndex !== null) {
+          diagramVoiceRequestCounter += 1
+          set({
+            activeMessageIndex: priorLastAssistantIndex,
+            diagramVoiceRequest: { requestId: diagramVoiceRequestCounter, messageIndex: priorLastAssistantIndex },
+          })
+          void get().drawDiagram(priorLastAssistantIndex)
+        }
       }
 
+      if (wasCancelled) return
+
       set({ voiceState: 'playing' })
-      await playAudioBlob(response.audio)
-      set((state) => (state.voiceState === 'playing' ? { voiceState: 'idle' } : {}))
+      const outcome = await playAudioBlob(response.audio)
+      // 'interrupted' means something else already changed voiceState (a
+      // new recording, a replay, another cancel) -- setting idle here would
+      // race it.
+      if (outcome !== 'interrupted') {
+        set((state) => (state.voiceState === 'playing' ? { voiceState: 'idle' } : {}))
+      }
     } catch (error) {
+      if (turnId !== currentVoiceTurnId) return // cancelled -- don't surface a stale error
       set({
         voiceState: 'error',
         voiceError: error instanceof Error ? error.message : 'Something went wrong with voice input.',
@@ -399,8 +641,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get()
     const message = state.messages[messageIndex]
     if (!message || message.role !== 'assistant') return
-    // Voice recording/playback already own voiceState -- don't fight them.
-    if (state.voiceState === 'recording' || state.voiceState === 'processing' || state.voiceState === 'playing') return
+    // A live voice turn (recording, or preparing its own reply) owns
+    // voiceState -- don't fight it. Already-playing audio is fine to
+    // interrupt: switching which message plays is the point of clicking a
+    // different 🔊 button.
+    if (state.voiceState === 'recording' || state.voiceState === 'processing') return
+    if (state.voiceState === 'playing') get().stopSpeaking()
 
     set({ activePlaybackIndex: messageIndex })
 
@@ -409,7 +655,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (!audioBlob) {
         set({ voiceState: 'processing' })
-        audioBlob = await synthesizeSpeech(message.content, get().selectedVoice)
+
+        const controller = new AbortController()
+        activeReplayAbortController = controller
+        try {
+          audioBlob = await synthesizeSpeech(message.content, get().selectedVoice, controller.signal)
+        } finally {
+          if (activeReplayAbortController === controller) activeReplayAbortController = null
+        }
 
         set((current) => {
           const currentMessage = current.messages[messageIndex]
@@ -420,11 +673,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         })
       }
 
+      // cancelVoiceTurn() may have aborted the synthesis above and already
+      // moved on (voiceState back to 'idle', or a different message now
+      // active) -- don't resurrect playback the student no longer asked for.
+      if (get().voiceState !== 'processing' || get().activePlaybackIndex !== messageIndex) return
+
       set({ voiceState: 'playing' })
-      await playAudioBlob(audioBlob)
-      set((current) => (current.voiceState === 'playing' ? { voiceState: 'idle' } : {}))
+      const outcome = await playAudioBlob(audioBlob)
+      if (outcome !== 'interrupted') {
+        set((current) => (current.voiceState === 'playing' ? { voiceState: 'idle' } : {}))
+      }
     } catch {
-      set({ voiceState: 'idle' })
+      set((current) => (current.activePlaybackIndex === messageIndex ? { voiceState: 'idle' } : {}))
     } finally {
       set((current) => (current.activePlaybackIndex === messageIndex ? { activePlaybackIndex: null } : {}))
     }
@@ -450,6 +710,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Per-viewer convenience only -- losing the persisted preference isn't fatal.
     }
     set({ selectedVoice: voiceId })
+  },
+
+  setInterruptBySpeaking: (value) => {
+    try {
+      localStorage.setItem(INTERRUPT_BY_SPEAKING_STORAGE_KEY, String(value))
+    } catch {
+      // Per-viewer convenience only -- losing the persisted preference isn't fatal.
+    }
+    set({ interruptBySpeaking: value })
   },
 
   previewVoice: async (voiceId) => {

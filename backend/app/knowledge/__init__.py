@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import os
 
+from app.config import KNOWLEDGE_DEFAULTS
+
 from .base import Chunk, SearchResult, VectorStore
 from .consistency import (
     ConsistencyCheckResult,
@@ -68,15 +70,12 @@ __all__ = [
     "summarize_golden_qa_results",
 ]
 
-_DEFAULT_VECTOR_STORE_PATH = "./vector_store.db"
-
-
 def get_vector_store() -> VectorStore:
     """Build the VectorStore adapter configured via the VECTOR_STORE env var."""
-    backend = os.getenv("VECTOR_STORE", "sqlite_vec").lower()
+    backend = os.getenv("VECTOR_STORE", KNOWLEDGE_DEFAULTS.vector_store).lower()
 
     if backend == "sqlite_vec":
-        db_path = os.getenv("VECTOR_STORE_PATH", _DEFAULT_VECTOR_STORE_PATH)
+        db_path = os.getenv("VECTOR_STORE_PATH", KNOWLEDGE_DEFAULTS.vector_store_path)
         return SqliteVecStore(db_path=db_path)
 
     raise ValueError(f"Unknown VECTOR_STORE: {backend!r} (expected 'sqlite_vec')")

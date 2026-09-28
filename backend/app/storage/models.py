@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.config import ORCHESTRATION_DEFAULTS
+
 
 class Base(DeclarativeBase):
     pass
@@ -35,7 +37,7 @@ class ChatSession(Base):
     # The teaching mode (see prompt_builder.TEACHING_MODES) used for this
     # session's most recent turn -- mode is a per-turn setting, not a fixed
     # session property, so this reflects "currently", not "always".
-    mode: Mapped[str] = mapped_column(String(20), nullable=False, default="textbook")
+    mode: Mapped[str] = mapped_column(String(20), nullable=False, default=ORCHESTRATION_DEFAULTS.default_teaching_mode)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -59,8 +61,9 @@ class UsageEvent(Base):
     # ingestion embedding call), "retrieval" (a RetrievalService.retrieve()
     # call -- metrics only, no token cost of its own; see the retrieval_*/
     # guardrail_triggered columns below), "asr" (a voice turn's
-    # ASRProvider.transcribe() call), or "tts" (a voice turn's
-    # TTSProvider.synthesize() call).
+    # ASRProvider.transcribe() call), "tts" (a voice turn's
+    # TTSProvider.synthesize() call), or "diagram" (a POST /api/diagram
+    # call -- see app.orchestration.diagrams).
     event_type: Mapped[str] = mapped_column(String(20), nullable=False, default="generation")
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)

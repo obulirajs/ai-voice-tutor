@@ -30,6 +30,10 @@ class VisionProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
-        """Return the model's text transcription of one image, per instructions, plus token usage."""
+    async def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+        """Return the model's text transcription of one image, per
+        instructions, plus token usage. Async for the same reason as
+        ModelProvider.generate() -- ingesting a scan-heavy PDF makes many of
+        these calls, and none of them should block the event loop.
+        """
         raise NotImplementedError

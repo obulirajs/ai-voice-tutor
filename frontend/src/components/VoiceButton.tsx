@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
-import { useAudioPlayer } from '../hooks/useAudioPlayer'
-import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
+import { useBargeInMonitor, useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { useAppStore } from '../store'
 import './VoiceButton.css'
 
@@ -31,12 +30,15 @@ function MicOffIcon() {
   )
 }
 
-function SpeakerIcon() {
+// Shown on the mic button while the tutor is speaking -- a stop square
+// (interrupt) with the mic's own outline still visible, since clicking it
+// does both: stop playback AND start listening.
+function InterruptIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-      <polygon points="4,9 8,9 12,5 12,19 8,15 4,15" fill="currentColor" />
-      <path d="M16 9a5 5 0 0 1 0 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M18.5 6.5a9 9 0 0 1 0 11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0" />
+      <rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor" stroke="none" />
     </svg>
   )
 }
@@ -67,9 +69,11 @@ export function VoiceButton() {
   const startVoiceRecordingAction = useAppStore((state) => state.startVoiceRecording)
   const stopVoiceRecordingAction = useAppStore((state) => state.stopVoiceRecording)
   const sendVoiceAudio = useAppStore((state) => state.sendVoiceAudio)
+  const stopSpeaking = useAppStore((state) => state.stopSpeaking)
+  const cancelVoiceTurn = useAppStore((state) => state.cancelVoiceTurn)
+  const interruptBySpeaking = useAppStore((state) => state.interruptBySpeaking)
 
   const { isRecording, startRecording, stopRecording, audioBlob, hasPermission, silenceProgress } = useVoiceRecorder()
-  const { stop: stopPlayback } = useAudioPlayer()
 
   const [showHint, setShowHint] = useState(false)
   const sentBlobRef = useRef<Blob | null>(null)
@@ -115,20 +119,24 @@ export function VoiceButton() {
       if (hasPermission === false) return
     }
 
-    // Can't listen and speak at once -- stop any TTS playback first.
-    if (voiceState === 'playing') stopPlayback()
+    // Can't listen and speak at once -- interrupt any TTS playback first
+    // (stopSpeaking also clears activePlaybackIndex, so a message's 🔊
+    // button doesn't stay stuck showing "stop" after this).
+    if (voiceState === 'playing') stopSpeaking()
 
     startVoiceRecordingAction()
     void startRecording()
   }
 
-  // Space bar toggles recording, except while the user is typing.
+  // Space bar toggles recording (including interrupting playback -- same as
+  // clicking the mic), except while the user is typing or a turn is
+  // processing (Esc/the Stop pill handle cancelling that).
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.code !== 'Space') return
       const target = event.target as HTMLElement | null
       const isTyping = target?.tagName === 'TEXTAREA' || target?.tagName === 'INPUT'
-      if (isTyping || isBusy || voiceState === 'playing') return
+      if (isTyping || isBusy) return
       event.preventDefault()
       toggleRecording()
     }
@@ -136,6 +144,36 @@ export function VoiceButton() {
     return () => document.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecording, hasPermission, voiceState, isBusy])
+
+  // Esc interrupts/cancels, unless a modal or the page lightbox is open --
+  // those get first claim on Esc (see useModalDismiss + VisualsTab's
+  // TextbookPageCard). Reads fresh state via getState() rather than
+  // subscribing, since this only needs to act at keypress time.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const state = useAppStore.getState()
+      if (state.isUploadPanelOpen || state.isSettingsPanelOpen || state.isPageLightboxOpen) return
+      if (state.voiceState === 'playing') {
+        event.preventDefault()
+        state.stopSpeaking()
+      } else if (state.voiceState === 'processing') {
+        event.preventDefault()
+        state.cancelVoiceTurn()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // "Interrupt by speaking" (Settings -> Voice, off by default): while ON
+  // and the tutor is talking, a separate mic monitor listens for sustained
+  // speech and barges in the same way clicking the mic does.
+  useBargeInMonitor(interruptBySpeaking && voiceState === 'playing', () => {
+    stopSpeaking()
+    startVoiceRecordingAction()
+    void startRecording()
+  })
 
   const visualState = hasPermission === false ? 'no-permission' : voiceState
 
@@ -151,8 +189,8 @@ export function VoiceButton() {
     icon = <SpinnerIcon />
     label = 'Processing voice input'
   } else if (visualState === 'playing') {
-    icon = <SpeakerIcon />
-    label = 'Playing response'
+    icon = <InterruptIcon />
+    label = 'Interrupt and ask'
   } else if (visualState === 'error') {
     icon = <WarningIcon />
     label = 'Voice input failed'
@@ -182,10 +220,24 @@ export function VoiceButton() {
         disabled={isBusy}
         aria-label={label}
         aria-pressed={isRecording}
-        title="Voice input (Space)"
+        title={visualState === 'playing' ? label : 'Voice input (Space)'}
       >
         {icon}
       </button>
+      {(voiceState === 'playing' || voiceState === 'processing') && (
+        <button
+          type="button"
+          className="voice-stop-pill"
+          onClick={voiceState === 'playing' ? stopSpeaking : cancelVoiceTurn}
+          aria-label={voiceState === 'playing' ? 'Stop speaking' : 'Cancel'}
+        >
+          <span className="voice-stop-pill__icon" aria-hidden="true">
+            ■
+          </span>
+          Stop
+          <span className="voice-stop-pill__status">{voiceState === 'playing' ? 'Speaking…' : 'Thinking…'}</span>
+        </button>
+      )}
     </div>
   )
 }

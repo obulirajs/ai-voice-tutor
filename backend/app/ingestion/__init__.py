@@ -2,9 +2,11 @@
 
 Public surface: ingest_pdf() (the full pipeline), IngestResult (including
 its per-page PageQualitySummary/quality_warning -- see pipeline.py and
-app.ingestion.pdf.TextQualityResult), and the upload-validation helpers
+app.ingestion.pdf.TextQualityResult), the upload-validation helpers
 (looks_like_pdf, compute_content_hash, open_validated_pdf, InvalidPdfError)
-callers should run before invoking ingest_pdf. Depends on app.models' and
+callers should run before invoking ingest_pdf, and render_document_page_png()
+(the Visual Companion's page-view feature -- renders one page of an
+already-stored PDF to PNG, standalone from the ingest pipeline). Depends on app.models' and
 app.knowledge's interfaces only, never a concrete adapter — see
 technical-design.md's dependency-inversion convention. Retrieval-quality
 checking (both the automatic post-ingestion consistency check and the
@@ -14,7 +16,7 @@ see IngestResult.consistency_check and app.knowledge.golden_qa.
 
 from __future__ import annotations
 
-from .pdf import TextQualityResult
+from .pdf import TextQualityResult, render_document_page_png
 from .pipeline import (
     IngestResult,
     PageQualitySummary,
@@ -38,4 +40,5 @@ __all__ = [
     "ingest_pdf",
     "looks_like_pdf",
     "open_validated_pdf",
+    "render_document_page_png",
 ]

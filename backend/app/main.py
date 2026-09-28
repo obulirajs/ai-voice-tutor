@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     chat_router,
+    diagram_router,
     documents_router,
     parent_router,
     sessions_router,
@@ -14,7 +15,7 @@ from app.api import (
     tts_router,
     voice_router,
 )
-from app.storage import init_db
+from app.storage import ensure_documents_dir, init_db
 
 # Load the .env file
 load_dotenv()
@@ -28,6 +29,7 @@ _DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await init_db()
+    ensure_documents_dir()
     yield
 
 
@@ -39,6 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(chat_router, prefix="/api")
+app.include_router(diagram_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(subjects_router, prefix="/api")
 app.include_router(sessions_router, prefix="/api")

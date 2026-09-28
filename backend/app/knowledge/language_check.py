@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import random
 
+from app.config import KNOWLEDGE_DEFAULTS
+
 # Character-range heuristic, not a real language detector or LLM call: cheap
 # enough to run on every ingestion as a sanity check, not a grounding
 # guardrail. Devanagari has no overlap with Latin script, so its presence is
@@ -10,8 +12,6 @@ import random
 # signal present are treated as English.
 _FRENCH_ACCENT_CHARS = set("àâäéèêëîïôöùûüÿçœæÀÂÄÉÈÊËÎÏÔÖÙÛÜŸÇŒÆ")
 _DEVANAGARI_RANGE = ("ऀ", "ॿ")
-_MIN_SIGNAL_CHARS = 3
-_SAMPLE_SIZE = 5
 
 # Which language each subject's content is expected to be in. Subjects not
 # listed here (nothing beyond French exists yet -- see development-plan.md's
@@ -33,17 +33,18 @@ def detect_chunk_language(text: str) -> str | None:
     Returns None when the chunk has no strong signal either way (too short,
     mostly numbers/punctuation/whitespace) rather than force a guess.
     """
+    min_signal_chars = KNOWLEDGE_DEFAULTS.language_check_min_signal_chars
     low, high = _DEVANAGARI_RANGE
     devanagari = sum(1 for ch in text if low <= ch <= high)
-    if devanagari >= _MIN_SIGNAL_CHARS:
+    if devanagari >= min_signal_chars:
         return "hindi"
 
     french_accents = sum(1 for ch in text if ch in _FRENCH_ACCENT_CHARS)
-    if french_accents >= _MIN_SIGNAL_CHARS:
+    if french_accents >= min_signal_chars:
         return "french"
 
     ascii_letters = sum(1 for ch in text if ch.isascii() and ch.isalpha())
-    if ascii_letters >= _MIN_SIGNAL_CHARS:
+    if ascii_letters >= min_signal_chars:
         return "english"
 
     return None
@@ -65,7 +66,7 @@ def check_subject_language_mismatch(subject: str, chunk_texts: list[str]) -> str
     if expected is None or not chunk_texts:
         return None
 
-    sample = random.sample(chunk_texts, k=min(_SAMPLE_SIZE, len(chunk_texts)))
+    sample = random.sample(chunk_texts, k=min(KNOWLEDGE_DEFAULTS.language_check_sample_size, len(chunk_texts)))
     detected = [lang for text in sample if (lang := detect_chunk_language(text)) is not None]
     if not detected:
         return None

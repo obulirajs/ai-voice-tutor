@@ -17,6 +17,17 @@ const VAD_SILENCE_THRESHOLD = 0.02 // Time-domain RMS (0-1 scale) below this cou
 const VAD_SILENCE_DURATION_MS = 2000 // How long silence must persist before auto-stop.
 const VAD_INITIAL_GRACE_MS = 2000 // Ignore silence detection right after recording starts.
 
+// Barge-in ("Interrupt by speaking", Settings -> Voice) tuning -- same
+// RMS-over-time-domain-data approach as the VAD constants above, but a
+// separate monitor stream/threshold: talking over the tutor's synthesized
+// speech means the mic also picks up that speech itself (echoCancellation
+// helps but doesn't fully remove it through real speakers), so the bar for
+// "the student is actually talking" needs real margin above
+// VAD_SILENCE_THRESHOLD's ambient-noise floor.
+const BARGE_IN_THRESHOLD = 0.06 // Time-domain RMS (0-1 scale) above this counts as speech.
+const BARGE_IN_MIN_MS = 300 // How long speech must persist before triggering an interrupt.
+const BARGE_IN_IGNORE_MS = 500 // Ignore this long after the monitor starts -- speaker ramp-up/echo settle.
+
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined
   return PREFERRED_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type))
@@ -209,4 +220,96 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
   }, [releaseStream, startVAD])
 
   return { isRecording, startRecording, stopRecording, audioBlob, error, hasPermission, silenceProgress }
+}
+
+/**
+ * While `enabled`, opens a mic stream separate from useVoiceRecorder's own
+ * recording stream and watches for sustained speech via RMS -- "Interrupt
+ * by speaking" (Settings -> Voice, off by default). Calls `onBargeIn()` at
+ * most once per enabled period, then stops monitoring itself; the caller is
+ * expected to flip `enabled` off in response (e.g. VoiceButton stops
+ * playback and starts a real recording, which moves voiceState off
+ * 'playing'). Always closes its stream when `enabled` goes false, so the
+ * mic light isn't left on once the tutor stops talking.
+ */
+export function useBargeInMonitor(enabled: boolean, onBargeIn: () => void): void {
+  const onBargeInRef = useRef(onBargeIn)
+  useEffect(() => {
+    onBargeInRef.current = onBargeIn
+  }, [onBargeIn])
+
+  useEffect(() => {
+    if (!enabled) return
+
+    let cancelled = false
+    let frame: number | null = null
+    let audioContext: AudioContext | null = null
+    let stream: MediaStream | null = null
+    const startTime = Date.now()
+    let speechStart: number | null = null
+
+    navigator.mediaDevices
+      .getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      .then((mediaStream) => {
+        if (cancelled) {
+          mediaStream.getTracks().forEach((track) => track.stop())
+          return
+        }
+        stream = mediaStream
+
+        const AudioContextCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (!AudioContextCtor) return // No Web Audio API support -- barge-in just doesn't fire.
+
+        audioContext = new AudioContextCtor()
+        const source = audioContext.createMediaStreamSource(mediaStream)
+        const analyser = audioContext.createAnalyser()
+        analyser.fftSize = 512
+        // Read-only monitoring tap, same as startVAD's -- never connected to
+        // audioContext.destination, so this can't loop the mic back to speakers.
+        source.connect(analyser)
+
+        const dataArray = new Uint8Array(analyser.fftSize)
+
+        const check = () => {
+          if (cancelled) return
+
+          if (Date.now() - startTime >= BARGE_IN_IGNORE_MS) {
+            analyser.getByteTimeDomainData(dataArray)
+            let sumSquares = 0
+            for (let i = 0; i < dataArray.length; i += 1) {
+              const normalized = (dataArray[i] - 128) / 128
+              sumSquares += normalized * normalized
+            }
+            const rms = Math.sqrt(sumSquares / dataArray.length)
+
+            if (rms >= BARGE_IN_THRESHOLD) {
+              speechStart ??= Date.now()
+              if (Date.now() - speechStart >= BARGE_IN_MIN_MS) {
+                onBargeInRef.current()
+                return // Stop monitoring -- the caller is expected to flip `enabled` off.
+              }
+            } else {
+              speechStart = null
+            }
+          }
+
+          frame = requestAnimationFrame(check)
+        }
+
+        frame = requestAnimationFrame(check)
+      })
+      .catch(() => {
+        // Mic unavailable/denied for the monitor -- hands-free barge-in
+        // just doesn't fire; the explicit mic/Space/Esc controls still work.
+      })
+
+    return () => {
+      cancelled = true
+      if (frame !== null) cancelAnimationFrame(frame)
+      if (audioContext) void audioContext.close().catch(() => {})
+      if (stream) stream.getTracks().forEach((track) => track.stop())
+    }
+  }, [enabled])
 }

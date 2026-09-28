@@ -354,7 +354,7 @@ class _FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
         # value is irrelevant -- the fake store ignores it
         return EmbeddingResponse(embeddings=[[0.0] for _ in texts], usage=Usage())
 

@@ -9,6 +9,7 @@ as an opt-in alternative via VISION_PROVIDER=anthropic in .env.
 
 from __future__ import annotations
 
+import asyncio
 import io
 
 from PIL import Image
@@ -54,7 +55,13 @@ class TesseractVisionProvider(VisionProvider):
     def model_name(self) -> str:
         return f"tesseract-{self._langs}"
 
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+    async def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+        # pytesseract is a sync, CPU-bound call (no native async client, unlike
+        # the Ollama/Anthropic adapters) -- offload it so it can't block the
+        # event loop, same pattern as app.voice.asr_whisper's transcribe().
+        return await asyncio.to_thread(self._transcribe_sync, image_bytes)
+
+    def _transcribe_sync(self, image_bytes: bytes) -> VisionResponse:
         image = Image.open(io.BytesIO(image_bytes))
         text = self._pytesseract.image_to_string(image, lang=self._langs)
         # Tesseract is local -- no token usage, zero cost.

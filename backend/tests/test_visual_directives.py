@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from app.orchestration.visual_directives import VisualDirective, extract_directives
 
 
@@ -91,3 +93,73 @@ def test_mixed_directive_types_extracted_together() -> None:
         VisualDirective(directive_type="text_block", content="[Passage 1 — page 5]", label="page 5") in directives
     )
     assert not any(d.content == "9.99" for d in directives)
+
+
+# --- markdown table extraction (prompt_builder.py nudges the model toward
+# these for comparisons; see the "table" directive in the class comment) ---
+
+
+def test_french_verb_table_extracted() -> None:
+    reply = (
+        "**French Verb Conjugations (passé composé)**\n"
+        "| Verb | Auxiliary | Example |\n"
+        "|------|-----------|---------|\n"
+        "| manger | avoir | j'ai mangé |\n"
+        "| venir | être | je suis venu(e) |\n"
+        "| aller | être | je suis allé(e) |\n"
+    )
+    _, directives = extract_directives(reply)
+
+    table_directives = [d for d in directives if d.directive_type == "table"]
+    assert len(table_directives) == 1
+
+    table = table_directives[0]
+    assert table.label == "French Verb Conjugations (passé composé)"
+    payload = json.loads(table.content)
+    assert payload["headers"] == ["Verb", "Auxiliary", "Example"]
+    assert payload["rows"] == [
+        ["manger", "avoir", "j'ai mangé"],
+        ["venir", "être", "je suis venu(e)"],
+        ["aller", "être", "je suis allé(e)"],
+    ]
+
+
+def test_table_without_separator_is_not_extracted() -> None:
+    reply = (
+        "Verb | Auxiliary | Example\n"
+        "manger | avoir | j'ai mangé\n"
+        "venir | être | je suis venu(e)\n"
+    )
+    _, directives = extract_directives(reply)
+
+    assert not any(d.directive_type == "table" for d in directives)
+
+
+def test_table_and_formula_both_extracted() -> None:
+    reply = (
+        "Here's a comparison, and a formula:\n"
+        "| Shape | Sides |\n"
+        "|-------|-------|\n"
+        "| Triangle | 3 |\n"
+        "| Square | 4 |\n\n"
+        "$$a^2+b^2=c^2$$\n"
+    )
+    _, directives = extract_directives(reply)
+
+    assert any(d.directive_type == "table" for d in directives)
+    assert VisualDirective(directive_type="formula", content="a^2+b^2=c^2") in directives
+
+
+def test_malformed_row_width_padded_to_header_width() -> None:
+    reply = (
+        "| A | B | C |\n"
+        "|---|---|---|\n"
+        "| 1 | 2 |\n"
+        "| 3 | 4 | 5 | 6 |\n"
+    )
+    _, directives = extract_directives(reply)
+
+    table_directives = [d for d in directives if d.directive_type == "table"]
+    assert len(table_directives) == 1
+    payload = json.loads(table_directives[0].content)
+    assert payload["rows"] == [["1", "2", ""], ["3", "4", "5"]]

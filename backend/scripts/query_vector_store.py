@@ -44,7 +44,8 @@ async def main() -> None:
     vector_store = get_vector_store()
 
     for question in QUESTIONS:
-        (query_embedding,) = embedding_provider.embed([question]).embeddings
+        embedding_response = await embedding_provider.embed([question])
+        (query_embedding,) = embedding_response.embeddings
         results = await vector_store.search(COLLECTION, query_embedding, top_k=3)
 
         print("=" * 80)

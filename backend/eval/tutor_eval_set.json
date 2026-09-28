@@ -1,0 +1,388 @@
+[
+  {
+    "id": "fr-golden-01",
+    "type": "comprehension",
+    "subject": "French",
+    "question": "Where does Akanksha Sethi live in France, and why is her family there?",
+    "expected_answer": "Akanksha lives at 2 rue Balzac in France. Her father works at the Indian Embassy in France.",
+    "expected_refusal": false,
+    "source": "Leçon 1, p.4-5"
+  },
+  {
+    "id": "fr-golden-02",
+    "type": "vocab",
+    "subject": "French",
+    "question": "What French proverb matches the idea that regions and their products share the same name, like Champagne and champagne?",
+    "expected_answer": "The textbook gives examples of regions whose names match their famous products: Champagne/champagne, Camembert/camembert, and Cognac/cognac.",
+    "expected_refusal": false,
+    "source": "Leçon 1, p.8"
+  },
+  {
+    "id": "fr-golden-03",
+    "type": "table-or-diagram",
+    "subject": "French",
+    "question": "What is the futur antérieur of the verb DONNER for 'nous'?",
+    "expected_answer": "Nous aurons donné.",
+    "expected_refusal": false,
+    "source": "Leçon 2, p.13 (conjugation table)"
+  },
+  {
+    "id": "fr-golden-04",
+    "type": "comprehension",
+    "subject": "French",
+    "question": "What solutions does Pauline suggest when Ali worries about university costs?",
+    "expected_answer": "Pauline suggests bourses (scholarships), emplois à mi-temps (part-time jobs), and IUT (Instituts Universitaires de Technologie).",
+    "expected_refusal": false,
+    "source": "Leçon 2, p.11-12"
+  },
+  {
+    "id": "fr-golden-05",
+    "type": "grammar",
+    "subject": "French",
+    "question": "What is the nominal form (forme nominale) of the verb 'arriver'?",
+    "expected_answer": "Arrivée.",
+    "expected_refusal": false,
+    "source": "Leçon 2, p.16 (Forme verbale/nominale table)"
+  },
+  {
+    "id": "fr-golden-06",
+    "type": "comprehension",
+    "subject": "French",
+    "question": "Where does Pauline meet her cousin Adeline Veron, and what grammatical topic is introduced in that lesson?",
+    "expected_answer": "Pauline meets Adeline at Métro Châtelet. The lesson introduces the pronom relatif 'dont' and pronoms relatifs composés (lequel, laquelle, lesquels, lesquelles).",
+    "expected_refusal": false,
+    "source": "Leçon 3, p.20-23"
+  },
+  {
+    "id": "fr-golden-07",
+    "type": "ocr-page",
+    "subject": "French",
+    "question": "What job advertisements appear on page 27 of the textbook?",
+    "expected_answer": "Page 27 contains scanned job advertisements (petites annonces) with small print and handwritten-style text, used in the context of Pauline and Adeline's discussion about chercher du travail (looking for work).",
+    "expected_refusal": false,
+    "source": "Leçon 3, p.27 (scanned page)"
+  },
+  {
+    "id": "fr-golden-08",
+    "type": "vocab",
+    "subject": "French",
+    "question": "What three documents does one need to get a library card (carte de lecteur) according to the textbook?",
+    "expected_answer": "A pièce d'identité (ID document), une autorisation des parents (parental authorization), and une quittance d'électricité (electricity bill as proof of address).",
+    "expected_refusal": false,
+    "source": "Leçon 4, p.31-32"
+  },
+  {
+    "id": "fr-golden-09",
+    "type": "comprehension",
+    "subject": "French",
+    "question": "Which fable by La Fontaine is referenced in Leçon 4, and from which collection?",
+    "expected_answer": "Le Renard et les Raisins (The Fox and the Grapes), from LES FABLES, livre III, fable 11 by La Fontaine.",
+    "expected_refusal": false,
+    "source": "Leçon 4, p.38-39"
+  },
+  {
+    "id": "fr-golden-10",
+    "type": "grammar",
+    "subject": "French",
+    "question": "What is the rule for using the pronoun Y versus EN as shown in the grammar table?",
+    "expected_answer": "Y replaces complements introduced by à, chez, en, dans, or sur. EN replaces complements introduced by de or the partitive article.",
+    "expected_refusal": false,
+    "source": "Leçon 5, p.43 (Y/En table)"
+  },
+  {
+    "id": "fr-golden-11",
+    "type": "vocab",
+    "subject": "French",
+    "question": "What newspapers and magazines are mentioned in the lesson on media, and what is the publication frequency of each?",
+    "expected_answer": "Le Monde (quotidien/daily), Le Figaro (quotidien), L'Express (hebdomadaire/weekly), Reader's Digest (mensuel/monthly), Le Français dans le Monde (revue/review).",
+    "expected_refusal": false,
+    "source": "Leçon 5, p.46-47"
+  },
+  {
+    "id": "fr-golden-12",
+    "type": "ocr-page",
+    "subject": "French",
+    "question": "What media logos and newspaper front pages appear on page 48 of the textbook?",
+    "expected_answer": "Page 48 shows scanned newspaper front pages including L'Express, Le Monde, and Le Figaro, along with TV channel logos in a grid layout and a blog screenshot.",
+    "expected_refusal": false,
+    "source": "Leçon 5, p.48 (scanned page)"
+  },
+  {
+    "id": "fr-golden-13",
+    "type": "comprehension",
+    "subject": "French",
+    "question": "What facts about the Louvre museum are given in the textbook?",
+    "expected_answer": "The Louvre covers 40 hectares, contains 6000 paintings, has a glass pyramid designed by architect Ieoh Ming Pei, and receives about 9 million visitors.",
+    "expected_refusal": false,
+    "source": "Leçon 6, p.54-55"
+  },
+  {
+    "id": "fr-golden-14",
+    "type": "ocr-page",
+    "subject": "French",
+    "question": "What is the French title of the film 'Home Alone', and what handwritten-style text appears on page 53 about it?",
+    "expected_answer": "The French title is 'Maman, j'ai raté l'avion'. Page 53 contains handwritten-style cursive text in callout boxes summarizing the film.",
+    "expected_refusal": false,
+    "source": "Leçon 6, p.53 (scanned page with cursive text)"
+  },
+  {
+    "id": "fr-golden-15",
+    "type": "table-or-diagram",
+    "subject": "French",
+    "question": "What is the pronom possessif for 'notre' in the feminine plural form?",
+    "expected_answer": "Les nôtres.",
+    "expected_refusal": false,
+    "source": "Leçon 7, p.63 (Pronoms possessifs table)"
+  },
+  {
+    "id": "fr-golden-16",
+    "type": "vocab",
+    "subject": "French",
+    "question": "What health-related vocabulary and expressions are introduced when Nargis visits the doctor?",
+    "expected_answer": "Nargis has un rhume (a cold). Vocabulary includes: ordonnance (prescription), pharmacie (pharmacy), sécurité sociale, carte Vitale. Expressions: avoir mal à la tête/au dos/aux dents, crise cardiaque, vertige, nuit blanche, insomnie.",
+    "expected_refusal": false,
+    "source": "Leçon 7, p.60-62"
+  },
+  {
+    "id": "fr-golden-17",
+    "type": "grammar",
+    "subject": "French",
+    "question": "What are the irregular subjunctive stems for être, avoir, savoir, and pouvoir?",
+    "expected_answer": "Être → sois, avoir → aie, savoir → sache, pouvoir → puisse.",
+    "expected_refusal": false,
+    "source": "Leçon 8, p.71"
+  },
+  {
+    "id": "fr-golden-18",
+    "type": "grammar",
+    "subject": "French",
+    "question": "What are the three patterns of 'si' hypothétique and their tense sequences?",
+    "expected_answer": "1) Si + présent → futur simple. 2) Si + imparfait → conditionnel présent. 3) Si + plus-que-parfait → conditionnel passé.",
+    "expected_refusal": false,
+    "source": "Leçon 9, p.78 (Si hypothétique table)"
+  },
+  {
+    "id": "fr-golden-19",
+    "type": "comprehension",
+    "subject": "French",
+    "question": "How does the textbook compare the French and Indian political systems regarding the role of the head of government?",
+    "expected_answer": "In France, the Président is elected for 5 years, is chef des armées, and nommes the Premier ministre. In India, the Premier Ministre (Prime Minister) has more executive power than in France, Lok Sabha and Rajya Sabha form the parliament, and the Chief Minister leads state government.",
+    "expected_refusal": false,
+    "source": "Leçon 10, p.85-92"
+  },
+  {
+    "id": "fr-golden-20",
+    "type": "grammar",
+    "subject": "French",
+    "question": "In the discours rapporté table, how do you convert the direct speech «Viens ce soir» to indirect speech?",
+    "expected_answer": "Il te demande de venir ce soir. (A phrase impérative in direct speech uses de + infinitif in indirect speech.)",
+    "expected_refusal": false,
+    "source": "Leçon 10, p.87 (Style Direct/Indirect table)"
+  },
+  {
+    "id": "fr-golden-21",
+    "type": "vocab",
+    "subject": "French",
+    "question": "What are the seven labeled parts of a computer in the diagram on page 99?",
+    "expected_answer": "1. Écran (screen), 2. Modem, 3. Unité centrale (CPU/tower), 4. Souris (mouse), 5. Haut-parleur (speaker), 6. Imprimante (printer), 7. Clavier (keyboard).",
+    "expected_refusal": false,
+    "source": "Leçon 11, p.99 (Computer parts diagram)"
+  },
+  {
+    "id": "fr-golden-22",
+    "type": "ocr-page",
+    "subject": "French",
+    "question": "What details appear on the 'Le Monde en Fête' festival poster on page 107?",
+    "expected_answer": "The poster advertises a festival in Nantes on Samedi 21 mars and Dimanche 22 mars, at the Maison de quartier de l'île de Nantes, 2 rue Conan Mériadec. Entry is GRATUIT (free). Website: www.autourdumonde.asso.fr.",
+    "expected_refusal": false,
+    "source": "Leçon 12, p.107 (scanned poster with artistic text)"
+  },
+  {
+    "id": "fr-golden-23",
+    "type": "grammar",
+    "subject": "French",
+    "question": "What is the passé composé of 'aller' for the third person singular feminine?",
+    "expected_answer": "Elle est allée.",
+    "expected_refusal": false,
+    "source": "Conjugaisons, p.115-126 (Aller conjugation table)"
+  },
+  {
+    "id": "fr-golden-24",
+    "type": "out-of-scope",
+    "subject": "French",
+    "question": "What does the textbook say about the French poet Victor Hugo's major works?",
+    "expected_answer": "This is out of scope. The textbook does not discuss Victor Hugo or his works. It references Jacques Prévert (L'Accent Grave from PAROLES), La Fontaine (Le Renard et les Raisins from LES FABLES), and Saint-Exupéry (Le Petit Prince), but not Victor Hugo.",
+    "expected_refusal": true,
+    "source": "Not in the textbook"
+  },
+  {
+    "id": "fr-golden-25",
+    "type": "out-of-scope",
+    "subject": "French",
+    "question": "What does the textbook explain about the French passé simple tense?",
+    "expected_answer": "This is out of scope. The textbook does not cover the passé simple. The tenses covered include présent, passé composé, imparfait, futur simple, futur antérieur, conditionnel présent, conditionnel passé, plus-que-parfait, subjonctif, participe présent, and gérondif.",
+    "expected_refusal": true,
+    "source": "Not in the textbook"
+  },
+  {
+    "id": "fr-golden-26",
+    "type": "out-of-scope",
+    "subject": "French",
+    "question": "What information does the textbook provide about French cuisine, such as recipes for crêpes or croissants?",
+    "expected_answer": "This is out of scope. The textbook does not contain recipes or detailed discussion of French cuisine. It briefly mentions cuisiner un plat d'ailleurs (cooking a dish from elsewhere) in the context of celebrating cultural diversity (Leçon 12), but provides no recipes.",
+    "expected_refusal": true,
+    "source": "Not in the textbook"
+  },
+  {
+    "id": "qa-check-01",
+    "type": "qa-check",
+    "subject": "French",
+    "question": "Quels sont les festivals mentionnés dans le livre?",
+    "expected_substrings": [
+      "interculturel",
+      "Journées Interculturelles",
+      "Nantes"
+    ],
+    "expected_refusal": false,
+    "source": "backend/app/api/chat.py _QA_CHECKS[0]"
+  },
+  {
+    "id": "qa-check-02",
+    "type": "qa-check",
+    "subject": "French",
+    "question": "What is quantum physics?",
+    "expected_substrings": null,
+    "expected_refusal": true,
+    "source": "backend/app/api/chat.py _QA_CHECKS[1]"
+  },
+  {
+    "id": "refusal-01",
+    "type": "refusal",
+    "subject": "French",
+    "question": "What are the public holidays in France?",
+    "expected_answer": null,
+    "expected_refusal": true,
+    "source": "hallucination check (not in textbook)"
+  },
+  {
+    "id": "refusal-02",
+    "type": "refusal",
+    "subject": "French",
+    "question": "Who won the 2022 FIFA World Cup?",
+    "expected_answer": null,
+    "expected_refusal": true,
+    "source": "hallucination check (not in textbook)"
+  },
+  {
+    "id": "refusal-03",
+    "type": "refusal",
+    "subject": "French",
+    "question": "Explain photosynthesis.",
+    "expected_answer": null,
+    "expected_refusal": true,
+    "source": "hallucination check (not in textbook)"
+  },
+  {
+    "id": "refusal-04",
+    "type": "refusal",
+    "subject": "French",
+    "question": "Quelle est la capitale du Japon ?",
+    "expected_answer": null,
+    "expected_refusal": true,
+    "source": "hallucination check (not in textbook)"
+  },
+  {
+    "id": "refusal-05",
+    "type": "refusal",
+    "subject": "French",
+    "question": "What is quantum physics?",
+    "expected_answer": null,
+    "expected_refusal": true,
+    "source": "hallucination check (not in textbook)"
+  },
+  {
+    "id": "refusal-06",
+    "type": "refusal",
+    "subject": "French",
+    "question": "Write a poem about Paris.",
+    "expected_answer": null,
+    "expected_refusal": true,
+    "source": "hallucination check (not in textbook)"
+  },
+  {
+    "id": "fr-lang-01",
+    "type": "french-language",
+    "subject": "French",
+    "question": "Où habite Akanksha en France, et pourquoi sa famille y est-elle ?",
+    "expected_answer": "Akanksha lives at 2 rue Balzac in France. Her father works at the Indian Embassy in France.",
+    "expected_refusal": false,
+    "source": "Leçon 1, p.4-5",
+    "language": "french"
+  },
+  {
+    "id": "fr-lang-02",
+    "type": "french-language",
+    "subject": "French",
+    "question": "Quel est le futur antérieur du verbe DONNER pour 'nous' ?",
+    "expected_answer": "Nous aurons donné.",
+    "expected_refusal": false,
+    "source": "Leçon 2, p.13 (conjugation table)",
+    "language": "french"
+  },
+  {
+    "id": "fr-lang-03",
+    "type": "french-language",
+    "subject": "French",
+    "question": "Que suggère Pauline quand Ali s'inquiète des frais universitaires ?",
+    "expected_answer": "Pauline suggests bourses (scholarships), emplois à mi-temps (part-time jobs), and IUT (Instituts Universitaires de Technologie).",
+    "expected_refusal": false,
+    "source": "Leçon 2, p.11-12",
+    "language": "french"
+  },
+  {
+    "id": "fr-lang-04",
+    "type": "french-language",
+    "subject": "French",
+    "question": "Quels sont les trois documents nécessaires pour obtenir une carte de lecteur ?",
+    "expected_answer": "A pièce d'identité (ID document), une autorisation des parents (parental authorization), and une quittance d'électricité (electricity bill as proof of address).",
+    "expected_refusal": false,
+    "source": "Leçon 4, p.31-32",
+    "language": "french"
+  },
+  {
+    "id": "sci-01",
+    "type": "science",
+    "subject": "Science",
+    "question": "What is a chemical equation, and how is it balanced?",
+    "expected_answer": "A chemical equation is the symbolic representation of a chemical reaction using formulae of reactants and products. It is balanced so the number of atoms of each element is the same on both sides, consistent with the law of conservation of mass.",
+    "expected_refusal": false,
+    "source": "Chapter 1 (Chemical Reactions and Equations), p.4"
+  },
+  {
+    "id": "sci-02",
+    "type": "science",
+    "subject": "Science",
+    "question": "State the law of conservation of mass.",
+    "expected_answer": "Mass can neither be created nor destroyed in a chemical reaction -- the total mass of the reactants equals the total mass of the products.",
+    "expected_refusal": false,
+    "source": "Chapter 1 (Chemical Reactions and Equations), p.4"
+  },
+  {
+    "id": "sci-03",
+    "type": "science",
+    "subject": "Science",
+    "question": "What is the difference between acids and bases?",
+    "expected_answer": "Acids are sour in taste and turn blue litmus red; bases are bitter and turn red litmus blue. Their strength depends on the concentration of H+ ions (acids) or OH- ions (bases) produced.",
+    "expected_refusal": false,
+    "source": "Chapter 2 (Acids, Bases and Salts), p.18"
+  },
+  {
+    "id": "sci-04",
+    "type": "science",
+    "subject": "Science",
+    "question": "What is photosynthesis, and what do autotrophs use it for?",
+    "expected_answer": "Photosynthesis is the process by which autotrophs (e.g. green plants) take in carbon dioxide, water, and use chlorophyll and sunlight energy to synthesize glucose (C6H12O6), fulfilling their carbon and energy requirements.",
+    "expected_refusal": false,
+    "source": "Chapter 6 (Life Processes), p.96-97"
+  }
+]

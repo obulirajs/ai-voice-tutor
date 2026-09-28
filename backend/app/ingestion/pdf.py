@@ -5,7 +5,10 @@ from dataclasses import dataclass
 
 import pymupdf
 
-# Heuristic thresholds for scanned-vs-text-layer detection.
+from app.config import INGESTION_DEFAULTS
+
+# Heuristic thresholds for scanned-vs-text-layer detection (see
+# app.config.INGESTION_DEFAULTS for the actual values).
 #
 # A page whose real word count is low *and* that carries meaningful embedded
 # image content is treated as needing the OCR/vision path. Word count (not
@@ -18,10 +21,7 @@ import pymupdf
 # almost the entire page — these textbooks lay a full-page decorative
 # border/background image on nearly every page, and including it would make
 # every page register as "high image coverage" regardless of actual content.
-_MIN_WORDS_PER_PAGE = 30
-_CONTENT_IMAGE_COVERAGE_RATIO = 0.15
-_BACKGROUND_IMAGE_AREA_RATIO = 0.95
-
+#
 # A second, independent signal a word-count check can't see: some PDFs
 # embed a Type3 (or otherwise custom-encoded) font with no usable
 # ToUnicode mapping. pymupdf still extracts a normal-looking word count from
@@ -29,7 +29,7 @@ _BACKGROUND_IMAGE_AREA_RATIO = 0.95
 # points instead of real characters -- unreadable to a human and useless to
 # an embedding model. A page whose extracted text is mostly this kind of
 # garbage needs the OCR/vision path just as much as a genuinely scanned one.
-_GARBLED_TEXT_RATIO_THRESHOLD = 0.3
+#
 # "C*" covers control/private-use/surrogate/unassigned categories; "So" is
 # "Symbol, other" (dingbats and similar blocks), which is where a broken
 # font's misdecoded glyphs typically land.
@@ -55,9 +55,6 @@ def garbled_text_ratio(text: str) -> float:
 # but still extracted poorly (e.g. a font-encoding issue below the
 # page_is_scanned garbled-ratio threshold, or just sparse/broken text) can
 # still trigger an OCR fallback -- see pipeline.py's per-page quality gate.
-_QUALITY_MIN_WORD_COUNT = 5
-_QUALITY_TARGET_AVG_WORD_LENGTH = 5.0
-_QUALITY_GOOD_THRESHOLD = 0.60
 
 
 @dataclass(frozen=True)
@@ -82,7 +79,7 @@ def assess_text_quality(text: str) -> TextQualityResult:
     words = text.split()
     word_count = len(words)
 
-    if word_count < _QUALITY_MIN_WORD_COUNT:
+    if word_count < INGESTION_DEFAULTS.quality_min_word_count:
         return TextQualityResult(
             score=0.0,
             garbled_ratio=garbled,
@@ -98,10 +95,10 @@ def assess_text_quality(text: str) -> TextQualityResult:
 
     garbled_score = 1.0 - min(garbled, 1.0)
     alpha_score = alpha_ratio
-    length_score = max(0.0, 1.0 - abs(avg_word_length - _QUALITY_TARGET_AVG_WORD_LENGTH) / 10.0)
+    length_score = max(0.0, 1.0 - abs(avg_word_length - INGESTION_DEFAULTS.quality_target_avg_word_length) / 10.0)
     score = 0.4 * garbled_score + 0.4 * alpha_score + 0.2 * length_score
 
-    verdict = "good" if score >= _QUALITY_GOOD_THRESHOLD else "poor"
+    verdict = "good" if score >= INGESTION_DEFAULTS.quality_good_threshold else "poor"
     return TextQualityResult(
         score=score,
         garbled_ratio=garbled,
@@ -138,7 +135,7 @@ def page_is_scanned(page: pymupdf.Page) -> bool:
     words = page.get_text("words")
     word_count = len(words)
 
-    if garbled_text_ratio(" ".join(w[4] for w in words)) >= _GARBLED_TEXT_RATIO_THRESHOLD:
+    if garbled_text_ratio(" ".join(w[4] for w in words)) >= INGESTION_DEFAULTS.garbled_text_ratio_threshold:
         return True
 
     page_area = page.rect.width * page.rect.height
@@ -149,7 +146,8 @@ def page_is_scanned(page: pymupdf.Page) -> bool:
     if not images:
         return False
 
-    non_background = [img for img in images if _bbox_area(img["bbox"]) < _BACKGROUND_IMAGE_AREA_RATIO * page_area]
+    background_ratio = INGESTION_DEFAULTS.background_image_area_ratio
+    non_background = [img for img in images if _bbox_area(img["bbox"]) < background_ratio * page_area]
     # If every image on the page covers almost the whole page, there's no
     # separate decorative layer to discard -- it's a single full-page image
     # (a classic whole-page scan), so treat it as content rather than
@@ -158,13 +156,33 @@ def page_is_scanned(page: pymupdf.Page) -> bool:
 
     content_image_ratio = sum(_bbox_area(img["bbox"]) for img in content_images) / page_area
 
-    return word_count < _MIN_WORDS_PER_PAGE and content_image_ratio >= _CONTENT_IMAGE_COVERAGE_RATIO
+    return (
+        word_count < INGESTION_DEFAULTS.min_words_per_page
+        and content_image_ratio >= INGESTION_DEFAULTS.content_image_coverage_ratio
+    )
 
 
 def extract_page_text(page: pymupdf.Page) -> str:
     return page.get_text()
 
 
-def render_page_png(page: pymupdf.Page, dpi: int = 200) -> bytes:
+def render_page_png(page: pymupdf.Page, dpi: int = INGESTION_DEFAULTS.page_render_dpi) -> bytes:
     pixmap = page.get_pixmap(dpi=dpi)
     return pixmap.tobytes("png")
+
+
+def render_document_page_png(
+    pdf_bytes: bytes, page_number: int, dpi: int = INGESTION_DEFAULTS.page_view_dpi
+) -> bytes:
+    """Opens `pdf_bytes` and renders one 1-indexed page to PNG bytes --
+    the Visual Companion's page-view feature (api/documents.py's
+    GET .../pages/{page_number}.png) calling into the same render_page_png()
+    ingestion already uses for vision/OCR, just at a lower, screen-friendly
+    DPI and from stored PDF bytes rather than a page already open mid-ingest.
+    """
+    document = load_pdf(pdf_bytes)
+    try:
+        page = document[page_number - 1]
+        return render_page_png(page, dpi=dpi)
+    finally:
+        document.close()

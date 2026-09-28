@@ -4,6 +4,7 @@
 
 import type {
   ChatResponse,
+  DiagramResponse,
   Document,
   DocumentIngestResult,
   HealthStatus,
@@ -114,6 +115,14 @@ export function deleteDocument(subject: string, documentId: number): Promise<voi
   })
 }
 
+// A plain URL, not a fetch() call -- the Visual Companion's page-view card
+// hands this straight to an <img src>, which loads it (and hits the
+// backend's cache, see api/documents.py) without going through the
+// request()/doFetch() JSON wrapper above.
+export function pageImageUrl(documentId: number, pageNumber: number): string {
+  return `/api/documents/${documentId}/pages/${pageNumber}.png`
+}
+
 export function chat(
   message: string,
   sessionId?: string | null,
@@ -129,6 +138,25 @@ export function chat(
       subject: subject ?? null,
       mode: mode ?? 'textbook',
     }),
+  })
+}
+
+export interface DiagramRequestPayload {
+  sessionId?: string | null
+  messageText: string
+  previousError?: string | null
+}
+
+export function requestDiagram(payload: DiagramRequestPayload, signal?: AbortSignal): Promise<DiagramResponse> {
+  return request<DiagramResponse>('/api/diagram', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: payload.sessionId ?? null,
+      message_text: payload.messageText,
+      previous_error: payload.previousError ?? null,
+    }),
+    signal,
   })
 }
 
@@ -165,11 +193,12 @@ export function getSessionMessages(sessionId: string): Promise<MessageResponse[]
   return request<MessageResponse[]>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`)
 }
 
-export async function synthesizeSpeech(text: string, voice?: string | null): Promise<Blob> {
+export async function synthesizeSpeech(text: string, voice?: string | null, signal?: AbortSignal): Promise<Blob> {
   const response = await doFetch('/api/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice: voice ?? null }),
+    signal,
   })
   if (!response.ok) {
     throw new Error(await extractErrorMessage(response))

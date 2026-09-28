@@ -19,6 +19,7 @@ export function StudentView() {
   // text, expanded source rows) for free -- the conversation itself already
   // resets via the store's setActiveSubject.
   const activeSubjectId = useAppStore((state) => state.activeSubjectId)
+  const role = useAppStore((state) => state.role)
   const openSettingsPanel = useAppStore((state) => state.openSettingsPanel)
   const setStoreTheme = useAppStore((state) => state.setTheme)
   const sessionId = useAppStore((state) => state.sessionId)
@@ -95,7 +96,7 @@ export function StudentView() {
           </button>
           <span className="main__title">Chat</span>
           <div className="main__header-actions">
-            <CostIndicator />
+            {role === 'parent' && <CostIndicator />}
             <button
               type="button"
               className="main__settings-button"

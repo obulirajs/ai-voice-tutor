@@ -13,9 +13,13 @@ generation calls; and SourceCitation/TurnResult, its result types. Also
 handle_voice_turn(), the voice-loop wrapper that
 checks for a control command (command_router.route_command()) before
 falling through to handle_turn() -- see architecture.md's "control commands
-vs. tutoring content" split. Depends on app.models', app.knowledge's,
-app.ingestion's, and app.storage's interfaces only, never a concrete
-adapter — see technical-design.md's dependency-inversion convention.
+vs. tutoring content" split. Also generate_diagram()/DiagramResult
+(diagrams.py) -- on-demand Mermaid diagram generation for the Visual
+Companion's "Draw diagram" button, a post-hoc rendering step over an
+already-produced reply, not part of the grounded chat loop above. Depends
+on app.models', app.knowledge's, app.ingestion's, and app.storage's
+interfaces only, never a concrete adapter — see technical-design.md's
+dependency-inversion convention.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import ORCHESTRATION_DEFAULTS
 from app.ingestion import collection_for_subject
 from app.knowledge import (
     RetrievalResult,
@@ -49,17 +54,20 @@ from app.storage import (
 )
 
 from .command_router import route_command
+from .diagrams import DiagramResult, generate_diagram
 from .prompt_builder import build_grounded_prompt
 from .visual_directives import VisualDirective, extract_directives
 
 __all__ = [
     "DEFAULT_SUBJECT",
+    "DiagramResult",
     "SourceCitation",
     "TurnResult",
     "VisualDirective",
     "VoiceTurnResult",
     "build_grounded_prompt",
     "extract_directives",
+    "generate_diagram",
     "handle_turn",
     "handle_voice_turn",
 ]
@@ -74,6 +82,7 @@ _NOT_COVERED_REPLY = "This topic isn't covered in your textbook. Try asking abou
 class SourceCitation:
     page_number: int | None
     score: float
+    document_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -108,7 +117,7 @@ async def handle_turn(
     user_message: str,
     subject: str = DEFAULT_SUBJECT,
     temperature: float | None = None,
-    mode: str = "textbook",
+    mode: str = ORCHESTRATION_DEFAULTS.default_teaching_mode,
 ) -> TurnResult:
     """Run one conversational turn, grounded in the subject's ingested textbook.
 
@@ -161,7 +170,10 @@ async def handle_turn(
     await append_message(db, session.id, role="user", content=user_message)
 
     started = time.perf_counter()
-    response = provider.generate(grounded_messages, temperature=temperature)
+    # ModelProvider.generate() is a genuine async network call (Ollama's
+    # AsyncClient / Anthropic's AsyncAnthropic) -- it can't block the event
+    # loop other requests (even GET /health) are served on.
+    response = await provider.generate(grounded_messages, temperature=temperature)
     latency_ms = (time.perf_counter() - started) * 1000
 
     await append_message(db, session.id, role="assistant", content=response.content)
@@ -180,7 +192,10 @@ async def handle_turn(
         event_type="generation",
     )
 
-    sources = [SourceCitation(page_number=c.page_number, score=c.score) for c in retrieval_result.chunks]
+    sources = [
+        SourceCitation(page_number=c.page_number, score=c.score, document_id=c.document_id)
+        for c in retrieval_result.chunks
+    ]
     _, directives = extract_directives(response.content)
     return TurnResult(reply=response.content, session_id=session.id, sources=sources, visual_directives=directives)
 
@@ -195,7 +210,7 @@ async def handle_voice_turn(
     transcribed_text: str,
     subject: str = DEFAULT_SUBJECT,
     temperature: float | None = None,
-    mode: str = "textbook",
+    mode: str = ORCHESTRATION_DEFAULTS.default_teaching_mode,
 ) -> VoiceTurnResult:
     """Voice-loop wrapper around handle_turn(): checks transcribed_text for a
     control command first (command_router.route_command()) -- a recognized
@@ -251,7 +266,7 @@ async def handle_voice_turn(
 
 
 async def _load_or_create_session(
-    db: AsyncSession, session_id: str | None, subject: str, mode: str = "textbook"
+    db: AsyncSession, session_id: str | None, subject: str, mode: str = ORCHESTRATION_DEFAULTS.default_teaching_mode
 ) -> ChatSession:
     if session_id is not None:
         session = await get_session(db, session_id)

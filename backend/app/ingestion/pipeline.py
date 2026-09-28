@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import pymupdf
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import INGESTION_DEFAULTS
 from app.knowledge import (
     Chunk,
     ConsistencyCheckResult,
@@ -103,7 +104,10 @@ async def _run_vision(
     is_scanned path and the poor-text-layer OCR fallback below."""
     image_bytes = pdf.render_page_png(page)
     started = time.perf_counter()
-    vision_response = vision_provider.transcribe_image(image_bytes, "image/png", _VISION_INSTRUCTIONS)
+    # VisionProvider.transcribe_image() is a genuine async call (local OCR
+    # offloaded to a thread internally, or a real async API call) -- it
+    # can't block the event loop for the whole ingestion request.
+    vision_response = await vision_provider.transcribe_image(image_bytes, "image/png", _VISION_INSTRUCTIONS)
     latency_ms = (time.perf_counter() - started) * 1000
     await _log_call_usage(
         db,
@@ -143,11 +147,11 @@ def _summarize_page_quality(
     )
 
     warnings: list[str] = []
-    if poor > 0 and poor / len(page_qualities) > 0.3:
+    if poor > 0 and poor / len(page_qualities) > INGESTION_DEFAULTS.poor_pages_warning_ratio:
         warnings.append(f"{poor} of {len(page_qualities)} pages had poor text quality and may not be searchable.")
     if empty > 0:
         warnings.append(f"{empty} pages produced no usable text.")
-    if avg_score < 0.5:
+    if avg_score < INGESTION_DEFAULTS.avg_score_warning_threshold:
         warnings.append(
             f"Overall text extraction quality is low (avg score {avg_score:.2f}). Retrieval may be unreliable."
         )
@@ -243,7 +247,9 @@ async def ingest_pdf(
     chunks: list[Chunk] = []
     if chunk_texts:
         started = time.perf_counter()
-        embedding_response = embedding_provider.embed(chunk_texts)
+        # Same reasoning as _run_vision above -- a whole textbook's worth of
+        # chunks in one embedding call is slow enough to matter.
+        embedding_response = await embedding_provider.embed(chunk_texts)
         latency_ms = (time.perf_counter() - started) * 1000
         await _log_call_usage(
             db,

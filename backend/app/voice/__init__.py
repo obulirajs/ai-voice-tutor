@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import os
 
+from app.config import VOICE_DEFAULTS
+
 from .asr_whisper import FasterWhisperAdapter
 from .base import ASRProvider, SynthesisResult, TranscriptionResult, TTSProvider
 from .spoken_form import SpokenFormPreprocessor
@@ -33,26 +35,18 @@ __all__ = [
 # LLM call itself defaults to the cloud). edge-tts, not Piper, is the
 # practical TTS default on Windows -- Piper's wheel support there is
 # inconsistent enough not to rely on, and the app already needs internet
-# for the Anthropic API.
-_DEFAULT_ASR_PROVIDER = "whisper"
-_DEFAULT_TTS_PROVIDER = "edge"
-
-_DEFAULT_WHISPER_MODEL_SIZE = "base"
-_DEFAULT_WHISPER_DEVICE = "cpu"
-
-_DEFAULT_EDGE_VOICE = "en-US-AriaNeural"
-_DEFAULT_PIPER_VOICE = "en_US-lessac-medium"
-_DEFAULT_PIPER_DATA_DIR = "./piper_voices"
+# for the Anthropic API. See app.config.VOICE_DEFAULTS for the fallback
+# values below.
 
 
 def get_asr_provider() -> ASRProvider:
     """Build the ASR adapter configured via the ASR_PROVIDER env var."""
-    provider = os.getenv("ASR_PROVIDER", _DEFAULT_ASR_PROVIDER).lower()
+    provider = os.getenv("ASR_PROVIDER", VOICE_DEFAULTS.asr_provider).lower()
 
     if provider == "whisper":
         return FasterWhisperAdapter(
-            model_size=os.getenv("WHISPER_MODEL_SIZE", _DEFAULT_WHISPER_MODEL_SIZE),
-            device=os.getenv("WHISPER_DEVICE", _DEFAULT_WHISPER_DEVICE),
+            model_size=os.getenv("WHISPER_MODEL_SIZE", VOICE_DEFAULTS.whisper_model_size),
+            device=os.getenv("WHISPER_DEVICE", VOICE_DEFAULTS.whisper_device),
         )
 
     raise ValueError(f"Unknown ASR_PROVIDER: {provider!r} (expected 'whisper')")
@@ -60,10 +54,10 @@ def get_asr_provider() -> ASRProvider:
 
 def get_tts_provider() -> TTSProvider:
     """Build the TTS adapter configured via the TTS_PROVIDER env var."""
-    provider = os.getenv("TTS_PROVIDER", _DEFAULT_TTS_PROVIDER).lower()
+    provider = os.getenv("TTS_PROVIDER", VOICE_DEFAULTS.tts_provider).lower()
 
     if provider == "edge":
-        return EdgeTTSAdapter(voice=os.getenv("EDGE_TTS_VOICE", _DEFAULT_EDGE_VOICE))
+        return EdgeTTSAdapter(voice=os.getenv("EDGE_TTS_VOICE", VOICE_DEFAULTS.edge_voice))
 
     if provider == "piper":
         try:
@@ -74,8 +68,8 @@ def get_tts_provider() -> TTSProvider:
                 "piper-tts`, or set TTS_PROVIDER=edge."
             ) from exc
         return PiperAdapter(
-            voice=os.getenv("PIPER_VOICE", _DEFAULT_PIPER_VOICE),
-            data_dir=os.getenv("PIPER_DATA_DIR", _DEFAULT_PIPER_DATA_DIR),
+            voice=os.getenv("PIPER_VOICE", VOICE_DEFAULTS.piper_voice),
+            data_dir=os.getenv("PIPER_DATA_DIR", VOICE_DEFAULTS.piper_data_dir),
         )
 
     raise ValueError(f"Unknown TTS_PROVIDER: {provider!r} (expected 'edge' or 'piper')")

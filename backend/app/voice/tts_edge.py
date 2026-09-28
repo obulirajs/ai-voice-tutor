@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from app.config import VOICE_DEFAULTS
+
 from .base import SynthesisResult, TTSProvider
 
 if TYPE_CHECKING:
     import edge_tts
-
-_DEFAULT_VOICE = "en-US-AriaNeural"
 
 
 class EdgeTTSAdapter(TTSProvider):
@@ -21,7 +21,7 @@ class EdgeTTSAdapter(TTSProvider):
 
     def __init__(
         self,
-        voice: str = _DEFAULT_VOICE,
+        voice: str = VOICE_DEFAULTS.edge_voice,
         communicate_factory: Callable[[str, str], edge_tts.Communicate] | None = None,
     ) -> None:
         self._voice = voice

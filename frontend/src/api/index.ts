@@ -14,14 +14,18 @@ export {
   getUsageSummary,
   healthCheck,
   NetworkError,
+  pageImageUrl,
+  requestDiagram,
   setRole,
   synthesizeSpeech,
   uploadDocument,
 } from './client'
+export type { DiagramRequestPayload } from './client'
 export type {
   ChatResponse,
   ConsistencyCheckFailure,
   ConsistencyCheckResult,
+  DiagramResponse,
   Document,
   DocumentIngestResult,
   HealthStatus,

@@ -231,3 +231,45 @@ def test_complex_formula() -> None:
     assert "\\" not in result
     assert "one half" in result or "1 over 2" in result
     assert "squared" in result
+
+
+# --- markdown table -> spoken summary (tables must never be read as pipes) ---
+
+
+def test_table_replaced_with_spoken_summary() -> None:
+    text = (
+        "| Verb | Auxiliary | Example |\n"
+        "|------|-----------|---------|\n"
+        "| manger | avoir | j'ai mangé |\n"
+        "| venir | être | je suis venu(e) |\n"
+    )
+    result = preprocessor.preprocess(text)
+
+    assert "|" not in result
+    assert result == "Here's a table comparing Verb, Auxiliary, Example. It's shown on your screen."
+
+
+def test_table_reply_has_no_pipe_characters() -> None:
+    text = (
+        "Let's compare these verbs.\n\n"
+        "| Verb | Auxiliary | Example |\n"
+        "|------|-----------|---------|\n"
+        "| manger | avoir | j'ai mangé |\n"
+        "| venir | être | je suis venu(e) |\n"
+        "| aller | être | je suis allé(e) |\n\n"
+        "Let me know if you'd like more examples."
+    )
+    result = preprocessor.preprocess(text)
+
+    assert "|" not in result
+    assert "table comparing Verb, Auxiliary, Example" in result
+    assert "Let's compare these verbs." in result
+    assert "Let me know if you'd like more examples." in result
+
+
+def test_table_header_bold_markers_stripped_in_summary() -> None:
+    text = "| **Verb** | Auxiliary |\n|---|---|\n| manger | avoir |\n"
+    result = preprocessor.preprocess(text)
+
+    assert "**" not in result
+    assert "table comparing Verb, Auxiliary" in result

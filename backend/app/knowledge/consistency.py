@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .base import Chunk, VectorStore
+from app.config import KNOWLEDGE_DEFAULTS
 
-_DEFAULT_SAMPLE_SIZE = 5
-_DEFAULT_TOP_K = 3
+from .base import Chunk, VectorStore
 
 
 @dataclass(frozen=True)
@@ -27,8 +26,8 @@ async def check_ingestion_consistency(
     chunks: list[Chunk],
     high_risk: list[bool],
     *,
-    sample_size: int = _DEFAULT_SAMPLE_SIZE,
-    top_k: int = _DEFAULT_TOP_K,
+    sample_size: int = KNOWLEDGE_DEFAULTS.consistency_sample_size,
+    top_k: int = KNOWLEDGE_DEFAULTS.consistency_top_k,
 ) -> ConsistencyCheckResult:
     """Automatic, zero-input consistency check run at the end of every ingestion.
 

@@ -30,6 +30,9 @@ class EmbeddingProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
-        """Return one embedding vector per input text (same order), plus token usage."""
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
+        """Return one embedding vector per input text (same order), plus
+        token usage. Async for the same reason as ModelProvider.generate() --
+        a slow embedding call must not block the event loop.
+        """
         raise NotImplementedError

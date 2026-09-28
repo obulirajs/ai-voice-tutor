@@ -51,6 +51,20 @@ _HELP_PATTERN = _pattern(
 
 _HELP_RESPONSE = "You can ask me questions about your textbooks, or say 'switch to [subject]' to change subjects."
 
+# Draws a Mermaid diagram from the latest assistant reply (see api/diagram.py
+# and orchestration/diagrams.py) -- never reaches the tutor LLM, matching
+# every other command_router pattern. French phrasings included since this
+# app's primary subject is CBSE French.
+_DRAW_DIAGRAM_PATTERN = _pattern(
+    r"draw\s+(?:a\s+|the\s+)?diagram",
+    r"show\s+me\s+(?:a\s+|the\s+)?diagram",
+    r"make\s+(?:a\s+|the\s+)?diagram",
+    r"fais\s+un\s+sch[ée]ma",
+    r"montre[- ]moi\s+un\s+sch[ée]ma",
+)
+
+_DRAW_DIAGRAM_RESPONSE = "Drawing a diagram for you."
+
 
 def route_command(text: str, available_subjects: list[str]) -> CommandResult | None:
     """Classify one piece of transcribed/typed text as a control command, or
@@ -76,6 +90,9 @@ def route_command(text: str, available_subjects: list[str]) -> CommandResult | N
 
     if _HELP_PATTERN.match(stripped):
         return CommandResult(command_type="help", response_text=_HELP_RESPONSE)
+
+    if _DRAW_DIAGRAM_PATTERN.match(stripped):
+        return CommandResult(command_type="draw_diagram", response_text=_DRAW_DIAGRAM_RESPONSE)
 
     return None
 

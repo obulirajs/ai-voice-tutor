@@ -43,7 +43,7 @@ class ModelProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def generate(
+    async def generate(
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
@@ -53,5 +53,10 @@ class ModelProvider(ABC):
         None (the default) means the provider's own default behavior --
         callers needing deterministic output (e.g. the qa-check endpoint's
         eval loop) pass temperature=0 explicitly.
+
+        Async so a slow network call (Ollama/Anthropic) never blocks the
+        event loop other requests (even GET /health) are served on --
+        adapters use a truly async client (ollama.AsyncClient,
+        anthropic.AsyncAnthropic) or asyncio.to_thread around a sync one.
         """
         raise NotImplementedError

@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.config import STORAGE_DEFAULTS
+
 from .models import Base
 
-_DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./tutor.db"
-
-engine: AsyncEngine = create_async_engine(os.getenv("DATABASE_URL", _DEFAULT_DATABASE_URL))
+engine: AsyncEngine = create_async_engine(os.getenv("DATABASE_URL", STORAGE_DEFAULTS.database_url))
 _session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 

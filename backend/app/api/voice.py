@@ -272,7 +272,8 @@ async def _run_turn(
                 "transcription": transcription.text,
                 "reply": turn_result.reply,
                 "sources": [
-                    {"page_number": s.page_number, "score": s.score} for s in turn_result.sources
+                    {"page_number": s.page_number, "score": s.score, "document_id": s.document_id}
+                    for s in turn_result.sources
                 ],
                 "session_id": turn_result.session_id,
                 "is_command": turn_result.is_command,

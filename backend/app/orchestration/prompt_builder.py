@@ -19,13 +19,11 @@ from __future__ import annotations
 
 from typing import cast
 
+from app.config import ORCHESTRATION_DEFAULTS
 from app.knowledge.retrieval import RetrievedChunk
 from app.models import Message
 
 __all__ = ["TEACHING_MODES", "build_grounded_prompt"]
-
-_DEFAULT_MAX_HISTORY_MESSAGES = 10
-_DEFAULT_MODE = "textbook"
 
 _NOT_COVERED_REPLY = "This topic isn't covered in your textbook. Try asking about something from your syllabus."
 
@@ -41,6 +39,10 @@ _FORMATTING_INSTRUCTIONS = (
     "LaTeX: $...$ for inline, $$...$$ for standalone. Do NOT append formulas or mathematical notation "
     "when the answer does not involve math or science formulas.\n"
     "Bold key vocabulary terms and their definitions with **term**.\n"
+    "When comparing items (verb conjugations, vocabulary with meanings, properties of elements, etc.), "
+    "present the comparison as a compact markdown table: a header row, a |---|---| separator row, then "
+    "the data rows (max 6 columns, max 10 rows). Don't force a table when you're not comparing multiple "
+    "items.\n"
 )
 
 TEACHING_MODES = {
@@ -97,8 +99,8 @@ def build_grounded_prompt(
     subject_name: str,
     conversation_history: list[dict[str, str]],
     *,
-    mode: str = _DEFAULT_MODE,
-    max_history_messages: int = _DEFAULT_MAX_HISTORY_MESSAGES,
+    mode: str = ORCHESTRATION_DEFAULTS.default_teaching_mode,
+    max_history_messages: int = ORCHESTRATION_DEFAULTS.max_history_messages,
 ) -> list[Message]:
     messages: list[Message] = [{"role": "system", "content": _build_system_prompt(subject_name, chunks, mode)}]
 
@@ -109,8 +111,10 @@ def build_grounded_prompt(
     return messages
 
 
-def _build_system_prompt(subject_name: str, chunks: list[RetrievedChunk], mode: str = _DEFAULT_MODE) -> str:
-    template = TEACHING_MODES.get(mode, TEACHING_MODES[_DEFAULT_MODE])
+def _build_system_prompt(
+    subject_name: str, chunks: list[RetrievedChunk], mode: str = ORCHESTRATION_DEFAULTS.default_teaching_mode
+) -> str:
+    template = TEACHING_MODES.get(mode, TEACHING_MODES[ORCHESTRATION_DEFAULTS.default_teaching_mode])
     prompt = template.format(subject=subject_name, not_covered=_NOT_COVERED_REPLY)
     return f"{prompt}\n{_build_passages_block(chunks)}"
 

@@ -6,13 +6,12 @@ import wave
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.config import VOICE_DEFAULTS
+
 from .base import SynthesisResult, TTSProvider
 
 if TYPE_CHECKING:
     from piper import PiperVoice
-
-_DEFAULT_VOICE = "en_US-lessac-medium"
-_DEFAULT_DATA_DIR = "./piper_voices"
 
 
 class PiperAdapter(TTSProvider):
@@ -25,8 +24,8 @@ class PiperAdapter(TTSProvider):
 
     def __init__(
         self,
-        voice: str = _DEFAULT_VOICE,
-        data_dir: str = _DEFAULT_DATA_DIR,
+        voice: str = VOICE_DEFAULTS.piper_voice,
+        data_dir: str = VOICE_DEFAULTS.piper_data_dir,
         voice_instance: PiperVoice | None = None,
     ) -> None:
         self._voice = voice

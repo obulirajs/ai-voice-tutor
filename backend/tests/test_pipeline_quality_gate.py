@@ -71,7 +71,7 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
         return EmbeddingResponse(
             embeddings=[[float(len(t))] for t in texts], usage=Usage(input_tokens=len(texts) * 10, output_tokens=None)
         )
@@ -90,7 +90,7 @@ class FakeVisionProvider(VisionProvider):
     def model_name(self) -> str:
         return "fake-vision"
 
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+    async def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
         self.calls.append((image_bytes, media_type, instructions))
         return VisionResponse(text=self._transcription, usage=Usage(input_tokens=200, output_tokens=50))
 

@@ -89,7 +89,7 @@ class FakeProvider(ModelProvider):
     def model_name(self) -> str:
         return self._model
 
-    def generate(
+    async def generate(
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
@@ -118,7 +118,7 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "nomic-embed-text"
 
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
         self.embed_call_count += 1
         return EmbeddingResponse(
             embeddings=[[0.1, 0.2] for _ in texts],

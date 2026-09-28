@@ -5,18 +5,31 @@ import { useCallback, useEffect, useState } from 'react'
 // plain playAudioBlob()/stopAudioPlayback() functions below. useAudioPlayer()
 // is a thin reactive view over the same singleton for any component that
 // wants to render playback state.
+export type PlaybackOutcome = 'ended' | 'interrupted' | 'error'
+
 let activeAudio: HTMLAudioElement | null = null
 let activeUrl: string | null = null
 let isPlaying = false
 let lastError: string | null = null
+// The in-flight clip's own finish() closure, if any -- lets
+// stopAudioPlayback() (called from outside playAudioBlob, e.g. the mic
+// button or Esc) resolve that clip's pending promise cleanly instead of
+// abandoning it. null whenever nothing is playing.
+let activeFinish: ((outcome: PlaybackOutcome, errorMessage?: string) => void) | null = null
 const listeners = new Set<() => void>()
 
 function notify(): void {
   listeners.forEach((listener) => listener())
 }
 
-function releaseActiveAudio(): void {
+function detachAndReleaseAudio(): void {
   if (activeAudio) {
+    // Detach handlers before pausing/clearing src -- on some browsers,
+    // clearing `src` itself fires a spurious 'error' event, which must
+    // never be mistaken for a real playback failure (especially during an
+    // intentional interrupt).
+    activeAudio.onended = null
+    activeAudio.onerror = null
     activeAudio.pause()
     activeAudio.src = ''
     activeAudio = null
@@ -27,9 +40,18 @@ function releaseActiveAudio(): void {
   }
 }
 
-/** Stops in-progress playback, if any. Safe to call when nothing is playing. */
+/**
+ * Stops in-progress playback, if any -- resolving the pending playAudioBlob()
+ * promise with 'interrupted' (never setting an error). Safe to call when
+ * nothing is playing.
+ */
 export function stopAudioPlayback(): void {
-  releaseActiveAudio()
+  if (activeFinish) {
+    activeFinish('interrupted')
+    return
+  }
+  // Defensive fallback -- activeFinish should always be set whenever
+  // isPlaying is true, but never leave isPlaying stuck true.
   if (isPlaying) {
     isPlaying = false
     notify()
@@ -57,15 +79,17 @@ const DURATION_BUFFER_MS = 10000
 const FALLBACK_DURATION_WATCHDOG_MS = 300000
 
 /**
- * Plays one audio blob to completion, resolving when it ends (or fails).
- * Starting a new clip stops whatever was already playing.
+ * Plays one audio blob, resolving once it's done: 'ended' (played through
+ * naturally), 'interrupted' (stopAudioPlayback() was called, or a newer
+ * playAudioBlob() call superseded this one), or 'error'. Starting a new
+ * clip stops whatever was already playing (that older clip resolves
+ * 'interrupted', same as an explicit stopAudioPlayback() call).
  */
-
-export function playAudioBlob(audioBlob: Blob): Promise<void> {
-  releaseActiveAudio()
+export function playAudioBlob(audioBlob: Blob): Promise<PlaybackOutcome> {
+  stopAudioPlayback()
   lastError = null
 
-  return new Promise<void>((resolve) => {
+  return new Promise<PlaybackOutcome>((resolve) => {
     const url = URL.createObjectURL(audioBlob)
     const audioEl = new Audio(url)
     activeUrl = url
@@ -75,36 +99,39 @@ export function playAudioBlob(audioBlob: Blob): Promise<void> {
 
     const armWatchdog = (ms: number) => {
       if (watchdog) clearTimeout(watchdog)
-      watchdog = setTimeout(() => finish('Audio playback timed out.'), ms)
+      watchdog = setTimeout(() => finish('error', 'Audio playback timed out.'), ms)
     }
 
-    const finish = (errorMessage?: string) => {
+    const finish = (outcome: PlaybackOutcome, errorMessage?: string) => {
       if (watchdog) clearTimeout(watchdog)
-      if (errorMessage) lastError = errorMessage
+      if (outcome === 'error' && errorMessage) lastError = errorMessage
       isPlaying = false
-      releaseActiveAudio()
+      activeFinish = null
+      detachAndReleaseAudio()
       notify()
-      resolve()
+      resolve(outcome)
     }
+
+    activeFinish = finish
 
     audioEl.onloadedmetadata = () => {
       const { duration } = audioEl
       armWatchdog(Number.isFinite(duration) && duration > 0 ? duration * 1000 + DURATION_BUFFER_MS : FALLBACK_DURATION_WATCHDOG_MS)
     }
-    audioEl.onended = () => finish()
-    audioEl.onerror = () => finish('Could not play the audio response.')
+    audioEl.onended = () => finish('ended')
+    audioEl.onerror = () => finish('error', 'Could not play the audio response.')
 
     armWatchdog(INITIAL_WATCHDOG_MS)
 
     isPlaying = true
     notify()
-    audioEl.play().catch(() => finish('Could not play the audio response.'))
+    audioEl.play().catch(() => finish('error', 'Could not play the audio response.'))
   })
 }
 
 interface UseAudioPlayerResult {
   isPlaying: boolean
-  play: (audioBlob: Blob) => Promise<void>
+  play: (audioBlob: Blob) => Promise<PlaybackOutcome>
   stop: () => void
   error: string | null
 }

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import re
 
-_DEFAULT_MAX_CHARS = 900
+from app.config import INGESTION_DEFAULTS
 
 
-def chunk_text(text: str, max_chars: int = _DEFAULT_MAX_CHARS) -> list[str]:
+def chunk_text(text: str, max_chars: int = INGESTION_DEFAULTS.chunk_max_chars) -> list[str]:
     """Paragraph-aware chunking.
 
     Splits on blank lines, then greedily packs paragraphs into chunks up to

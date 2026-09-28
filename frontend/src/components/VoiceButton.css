@@ -97,6 +97,39 @@
   }
 }
 
+.voice-stop-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-input));
+  color: var(--color-error);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.voice-stop-pill:hover {
+  background: color-mix(in srgb, var(--color-error) 20%, var(--color-bg-input));
+}
+
+.voice-stop-pill__icon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.voice-stop-pill__status {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
 .voice-button__hint {
   position: absolute;
   bottom: calc(100% + var(--spacing-sm));

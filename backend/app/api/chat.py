@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import ORCHESTRATION_DEFAULTS
 from app.knowledge import VectorStore, get_vector_store
 from app.models import (
     EmbeddingProvider,
@@ -27,13 +28,18 @@ class ChatRequest(BaseModel):
     # session already has a subject, so this is ignored when session_id is set.
     subject: str | None = None
     # See prompt_builder.TEACHING_MODES -- changes only how the model frames
-    # its answer, never what gets retrieved or the grounding guardrail.
-    mode: Literal["textbook", "teacher"] = "textbook"
+    # its answer, never what gets retrieved or the grounding guardrail. The
+    # Literal type can't be expressed in config.py (a plain str there), so
+    # the default is cast rather than duplicated as a second literal.
+    mode: Literal["textbook", "teacher"] = cast(
+        'Literal["textbook", "teacher"]', ORCHESTRATION_DEFAULTS.default_teaching_mode
+    )
 
 
 class SourceResponse(BaseModel):
     page_number: int | None
     score: float
+    document_id: int | None = None
 
 
 class VisualDirectiveResponse(BaseModel):
@@ -77,7 +83,7 @@ async def chat(
         reply=result.reply,
         session_id=result.session_id,
         sources=[
-            SourceResponse(page_number=s.page_number, score=s.score)
+            SourceResponse(page_number=s.page_number, score=s.score, document_id=s.document_id)
             for s in result.sources
         ],
         visual_directives=[
@@ -170,7 +176,7 @@ async def qa_check(
             temperature=0.0,
         )
         sources = [
-            SourceResponse(page_number=s.page_number, score=s.score)
+            SourceResponse(page_number=s.page_number, score=s.score, document_id=s.document_id)
             for s in result.sources
         ]
         checks.append(

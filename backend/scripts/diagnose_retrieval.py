@@ -137,11 +137,11 @@ async def check_databases() -> tuple[list[tuple[int, str, int]], dict[str, int],
     return subjects, chunk_counts, corpus_garbled
 
 
-def check_embedding() -> tuple[bool, str]:
+async def check_embedding() -> tuple[bool, str]:
     _safe_print("--- 3. Direct embedding sanity check ---")
     try:
         provider = get_embedding_provider()
-        response = provider.embed(["What is glucose?"])
+        response = await provider.embed(["What is glucose?"])
         (vector,) = response.embeddings
     except Exception as exc:  # noqa: BLE001
         _safe_print(f"Embedding call FAILED: {exc}")
@@ -252,7 +252,7 @@ async def main() -> None:
 
     ollama_running, embed_model_available = check_ollama()
     subjects, chunk_counts, corpus_garbled = await check_databases()
-    embedding_ok, embedding_summary = check_embedding()
+    embedding_ok, embedding_summary = await check_embedding()
     retrieval_results = await check_retrieval(subjects, chunk_counts) if embedding_ok else []
     alignment_ok, alignment_summary = check_collection_alignment(subjects, chunk_counts)
 

@@ -117,6 +117,37 @@ def test_help_recognizes_phrasings(text: str) -> None:
     assert "switch to" in result.response_text
 
 
+# --- draw_diagram ---
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "draw a diagram",
+        "Draw a diagram.",
+        "draw diagram",
+        "show me a diagram",
+        "Show me the diagram?",
+        "make a diagram",
+        "make diagram",
+        "fais un schéma",
+        "fais un schema",
+        "montre-moi un schéma",
+        "montre moi un schéma",
+    ],
+)
+def test_draw_diagram_recognizes_phrasings(text: str) -> None:
+    result = route_command(text, _SUBJECTS)
+
+    assert result is not None
+    assert result.command_type == "draw_diagram"
+    assert result.response_text == "Drawing a diagram for you."
+
+
+def test_what_is_a_diagram_is_not_a_command() -> None:
+    assert route_command("What is a diagram?", _SUBJECTS) is None
+
+
 # --- not a command ---
 
 

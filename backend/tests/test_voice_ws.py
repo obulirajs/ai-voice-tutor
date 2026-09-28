@@ -50,7 +50,7 @@ class FakeProvider(ModelProvider):
     def model_name(self) -> str:
         return "fake-model"
 
-    def generate(
+    async def generate(
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
@@ -70,7 +70,7 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
         embeddings = [[float(len(t) % 7), float(hash(t) % 11)] for t in texts]
         return EmbeddingResponse(embeddings=embeddings, usage=Usage(input_tokens=len(texts) * 10, output_tokens=None))
 
@@ -84,7 +84,7 @@ class FakeVisionProvider(VisionProvider):
     def model_name(self) -> str:
         return "fake-vision"
 
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+    async def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
         return VisionResponse(text="unused", usage=Usage(input_tokens=200, output_tokens=50))
 
 
@@ -302,7 +302,7 @@ def test_voice_ws_full_turn_returns_grounded_reply_and_audio(override_get_db: No
     assert response["is_command"] is False
     assert response["command_type"] is None
     assert response["new_subject"] is None
-    assert response["sources"] == [{"page_number": 7, "score": pytest.approx(0.9)}]
+    assert response["sources"] == [{"page_number": 7, "score": pytest.approx(0.9), "document_id": 1}]
 
     assert audio_frame == b"FAKE_WAV_BYTES"
     assert turn_complete == {"type": "turn_complete"}

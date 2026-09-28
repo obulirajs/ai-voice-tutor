@@ -56,12 +56,13 @@ export interface DocumentIngestResult {
 export interface SourceCitation {
   page_number: number | null
   score: number
+  document_id: number | null
 }
 
 // Mirrors backend/app/orchestration/visual_directives.py's VisualDirective --
 // the Visual Companion's render-on-directive contract (architecture.md).
 export interface VisualDirective {
-  directive_type: 'formula' | 'highlight' | 'text_block' | 'image_ref' | 'supplemented'
+  directive_type: 'formula' | 'highlight' | 'text_block' | 'image_ref' | 'supplemented' | 'table'
   content: string
   label: string | null
 }
@@ -150,6 +151,13 @@ export interface SessionPreview {
 export interface MessageResponse {
   role: string
   content: string
+}
+
+// Mirrors backend/app/api/diagram.py's DiagramResponse -- the Visual
+// Companion's on-demand "Draw diagram" flow (app.orchestration.diagrams).
+export interface DiagramResponse {
+  mermaid: string | null
+  reason: 'not_applicable' | 'invalid' | 'timeout' | 'disabled' | null
 }
 
 export interface VoiceOption {

@@ -134,6 +134,15 @@
   font-size: 0.8rem;
 }
 
+.settings-panel__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .settings-panel__voice-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -24,7 +24,7 @@ from app.models import (
     get_provider,
     get_vision_provider,
 )
-from app.storage import get_db
+from app.storage import get_db, get_document_pdf_path, get_page_cache_path
 from app.storage.models import Base
 
 
@@ -42,7 +42,7 @@ class FakeProvider(ModelProvider):
     def model_name(self) -> str:
         return "fake-model"
 
-    def generate(
+    async def generate(
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
@@ -312,7 +312,7 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
         embeddings = [[float(len(t) % 7), float(hash(t) % 11)] for t in texts]
         return EmbeddingResponse(embeddings=embeddings, usage=Usage(input_tokens=len(texts) * 10, output_tokens=None))
 
@@ -326,7 +326,7 @@ class FakeVisionProvider(VisionProvider):
     def model_name(self) -> str:
         return "fake-vision"
 
-    def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
+    async def transcribe_image(self, image_bytes: bytes, media_type: str, instructions: str) -> VisionResponse:
         return VisionResponse(text="unused", usage=Usage(input_tokens=200, output_tokens=50))
 
 
@@ -394,7 +394,7 @@ class QuestionAwareEmbeddingProvider(EmbeddingProvider):
     def model_name(self) -> str:
         return "fake-embed"
 
-    def embed(self, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
         embeddings = [[1.0, 0.0] if self._covered_substring in t else [0.0, 1.0] for t in texts]
         return EmbeddingResponse(embeddings=embeddings, usage=Usage(input_tokens=len(texts) * 10, output_tokens=None))
 
@@ -785,6 +785,210 @@ def test_delete_document_rejects_wrong_subject(override_get_db: None) -> None:
         app.dependency_overrides.pop(get_vector_store, None)
 
     assert response.status_code == 404
+
+
+# --- Document PDF storage + page-view (Run B) -------------------------
+
+
+def test_upload_document_stores_pdf_bytes(override_get_db: None) -> None:
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+    pdf_bytes = _build_test_pdf()
+
+    try:
+        response = client.post(
+            "/api/subjects/french/documents",
+            files={"file": ("chapter5.pdf", pdf_bytes, "application/pdf")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 200
+    document_id = response.json()["document_id"]
+    assert get_document_pdf_path(document_id).read_bytes() == pdf_bytes
+
+
+def test_delete_document_removes_stored_pdf_and_cache(override_get_db: None) -> None:
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        upload_body = client.post(
+            "/api/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        ).json()
+        document_id = upload_body["document_id"]
+
+        pdf_path = get_document_pdf_path(document_id)
+        assert pdf_path.exists()
+        cache_path = get_page_cache_path(document_id, 1)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(b"fake cached png")
+
+        response = client.delete(f"/api/subjects/french/documents/{document_id}")
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 204
+    assert not pdf_path.exists()
+    assert not cache_path.exists()
+
+
+def test_get_document_page_returns_png_for_valid_page(override_get_db: None) -> None:
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        upload_body = client.post(
+            "/api/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        ).json()
+        document_id = upload_body["document_id"]
+
+        response = client.get(f"/api/documents/{document_id}/pages/1.png")
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG")
+
+
+def test_get_document_page_404s_for_unknown_document(override_get_db: None) -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/documents/999/pages/1.png")
+
+    assert response.status_code == 404
+
+
+def test_get_document_page_404s_for_out_of_range_page(override_get_db: None) -> None:
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        upload_body = client.post(
+            "/api/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        ).json()
+        document_id = upload_body["document_id"]
+
+        response = client.get(f"/api/documents/{document_id}/pages/99.png")
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 404
+
+
+def test_get_document_page_404s_with_friendly_message_when_pdf_missing(override_get_db: None) -> None:
+    """Simulates a pre-page-view document (or one whose stored PDF was
+    otherwise lost) -- must 404 with a friendly, actionable message rather
+    than crashing."""
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        upload_body = client.post(
+            "/api/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        ).json()
+        document_id = upload_body["document_id"]
+
+        get_document_pdf_path(document_id).unlink()
+
+        response = client.get(f"/api/documents/{document_id}/pages/1.png")
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 404
+    assert "re-upload" in response.json()["detail"]
+
+
+def test_get_document_page_second_request_served_from_cache(
+    override_get_db: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.ingestion import pdf as pdf_module
+
+    call_count = {"n": 0}
+    original_render = pdf_module.render_page_png
+
+    def counting_render(page: Any, dpi: int) -> bytes:
+        call_count["n"] += 1
+        return original_render(page, dpi=dpi)
+
+    monkeypatch.setattr(pdf_module, "render_page_png", counting_render)
+
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    client = TestClient(app)
+
+    try:
+        upload_body = client.post(
+            "/api/subjects/french/documents",
+            files={"file": ("chapter5.pdf", _build_test_pdf(), "application/pdf")},
+        ).json()
+        document_id = upload_body["document_id"]
+
+        first = client.get(f"/api/documents/{document_id}/pages/1.png")
+        second = client.get(f"/api/documents/{document_id}/pages/1.png")
+    finally:
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.content == second.content
+    assert call_count["n"] == 1
+
+
+def test_chat_sources_include_document_id(override_get_db: None) -> None:
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[get_vision_provider] = lambda: FakeVisionProvider()
+    app.dependency_overrides[get_vector_store] = lambda: FakeVectorStore()
+    fake = FakeProvider(reply="Bonjour !")
+    app.dependency_overrides[get_provider] = lambda: fake
+    client = TestClient(app)
+
+    try:
+        client.post(
+            "/api/subjects/general/documents",
+            files={"file": ("chapter1.pdf", _build_test_pdf(), "application/pdf")},
+        )
+        app.dependency_overrides[get_vector_store] = lambda: FixedResultVectorStore(
+            [SearchResult(text="Le present tense chunk.", document_id=1, page_number=3, distance=0.1)]
+        )
+
+        response = client.post("/api/chat", json={"message": "Bonjour"})
+    finally:
+        app.dependency_overrides.pop(get_provider, None)
+        app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_vector_store, None)
+
+    assert response.status_code == 200
+    assert response.json()["sources"][0]["document_id"] == 1
 
 
 def test_sanity_check_endpoint_reports_page_match_and_out_of_scope(override_get_db: None) -> None:

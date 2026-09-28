@@ -3,15 +3,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.config import KNOWLEDGE_DEFAULTS
 from app.models import EmbeddingProvider
 
 from .base import VectorStore
 
 _PAGE_PATTERN = re.compile(r"p\.?\s*(\d+)", re.IGNORECASE)
-_SNIPPET_LENGTH = 200
-_PAGE_MATCH_TOLERANCE = 1
-_DEFAULT_TOP_K = 5
-_DEFAULT_LOW_CONFIDENCE_THRESHOLD = 0.5
 
 
 @dataclass(frozen=True)
@@ -72,8 +69,8 @@ async def run_golden_qa_check(
     collection: str,
     questions: list[GoldenQuestion],
     *,
-    top_k: int = _DEFAULT_TOP_K,
-    low_confidence_threshold: float = _DEFAULT_LOW_CONFIDENCE_THRESHOLD,
+    top_k: int = KNOWLEDGE_DEFAULTS.golden_qa_top_k,
+    low_confidence_threshold: float = KNOWLEDGE_DEFAULTS.golden_qa_low_confidence_threshold,
 ) -> list[GoldenQuestionResult]:
     """Read-only retrieval-quality check against already-stored vectors.
 
@@ -92,13 +89,14 @@ async def run_golden_qa_check(
     results: list[GoldenQuestionResult] = []
 
     for golden_question in questions:
-        (vector,) = embedding_provider.embed([golden_question.question]).embeddings
+        embedding_response = await embedding_provider.embed([golden_question.question])
+        (vector,) = embedding_response.embeddings
         hits = await vector_store.search(collection, vector, top_k=top_k)
 
         retrieved = [
             RetrievedChunk(
                 page_number=hit.page_number,
-                snippet=hit.text[:_SNIPPET_LENGTH],
+                snippet=hit.text[: KNOWLEDGE_DEFAULTS.golden_qa_snippet_length],
                 similarity=1.0 - hit.distance,
             )
             for hit in hits
@@ -108,7 +106,8 @@ async def run_golden_qa_check(
         page_match: bool | None = None
         if expected_page is not None:
             page_match = any(
-                r.page_number is not None and abs(r.page_number - expected_page) <= _PAGE_MATCH_TOLERANCE
+                r.page_number is not None
+                and abs(r.page_number - expected_page) <= KNOWLEDGE_DEFAULTS.golden_qa_page_match_tolerance
                 for r in retrieved
             )
 

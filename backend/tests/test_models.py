@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -20,19 +21,29 @@ _TESSERACT_AVAILABLE = bool(shutil.which("tesseract")) or Path(r"C:\Program File
 skip_without_tesseract = pytest.mark.skipif(not _TESSERACT_AVAILABLE, reason="Tesseract not installed")
 
 
+def _ollama_client(chat_result: object) -> MagicMock:
+    """A fake ollama.AsyncClient whose .chat() is awaitable -- MagicMock's
+    auto-generated attributes aren't awaitable by default, so .chat is
+    explicitly replaced with an AsyncMock."""
+    client = MagicMock()
+    client.chat = AsyncMock(return_value=chat_result)
+    return client
+
+
 def test_ollama_provider_generate_parses_response() -> None:
-    fake_client = MagicMock()
-    fake_client.chat.return_value = {
-        "message": {"content": "Bonjour !", "tool_calls": []},
-        "prompt_eval_count": 12,
-        "eval_count": 4,
-    }
+    fake_client = _ollama_client(
+        {
+            "message": {"content": "Bonjour !", "tool_calls": []},
+            "prompt_eval_count": 12,
+            "eval_count": 4,
+        }
+    )
     provider = OllamaProvider(model="llama3.2:1b", client=fake_client)
     messages: list[Message] = [{"role": "user", "content": "Dis bonjour"}]
 
-    response = provider.generate(messages)
+    response = asyncio.run(provider.generate(messages))
 
-    fake_client.chat.assert_called_once_with(model="llama3.2:1b", messages=messages)
+    fake_client.chat.assert_called_once_with(model="llama3.2:1b", messages=messages, think=False)
     assert response.content == "Bonjour !"
     assert response.tool_calls == []
     assert response.usage.input_tokens == 12
@@ -54,37 +65,84 @@ def test_anthropic_provider_exposes_name_and_model() -> None:
 
 
 def test_ollama_provider_passes_tools_through() -> None:
-    fake_client = MagicMock()
-    fake_client.chat.return_value = {"message": {"content": "ok"}}
+    fake_client = _ollama_client({"message": {"content": "ok"}})
     provider = OllamaProvider(model="llama3.2:1b", client=fake_client)
     tools = [{"type": "function", "function": {"name": "switch_subject"}}]
 
-    provider.generate([{"role": "user", "content": "hi"}], tools=tools)
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}], tools=tools))
 
     _, kwargs = fake_client.chat.call_args
     assert kwargs["tools"] == tools
 
 
 def test_ollama_provider_passes_temperature_through_as_option() -> None:
-    fake_client = MagicMock()
-    fake_client.chat.return_value = {"message": {"content": "ok"}}
+    fake_client = _ollama_client({"message": {"content": "ok"}})
     provider = OllamaProvider(model="llama3.2:1b", client=fake_client)
 
-    provider.generate([{"role": "user", "content": "hi"}], temperature=0.0)
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}], temperature=0.0))
 
     _, kwargs = fake_client.chat.call_args
     assert kwargs["options"] == {"temperature": 0.0}
 
 
 def test_ollama_provider_omits_options_when_temperature_not_given() -> None:
-    fake_client = MagicMock()
-    fake_client.chat.return_value = {"message": {"content": "ok"}}
+    fake_client = _ollama_client({"message": {"content": "ok"}})
     provider = OllamaProvider(model="llama3.2:1b", client=fake_client)
 
-    provider.generate([{"role": "user", "content": "hi"}])
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
 
     _, kwargs = fake_client.chat.call_args
     assert "options" not in kwargs
+
+
+def test_ollama_provider_passes_think_false_by_default() -> None:
+    fake_client = _ollama_client({"message": {"content": "ok"}})
+    provider = OllamaProvider(model="qwen3.5", client=fake_client)
+
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
+
+    _, kwargs = fake_client.chat.call_args
+    assert kwargs["think"] is False
+
+
+def test_ollama_provider_passes_think_true_when_configured() -> None:
+    fake_client = _ollama_client({"message": {"content": "ok"}})
+    provider = OllamaProvider(model="qwen3.5", think=True, client=fake_client)
+
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
+
+    _, kwargs = fake_client.chat.call_args
+    assert kwargs["think"] is True
+
+
+def test_ollama_provider_strips_think_tags_from_content() -> None:
+    fake_client = _ollama_client(
+        {"message": {"content": "<think>Let me consider the question...</think>\n\nBonjour !"}}
+    )
+    provider = OllamaProvider(model="qwen3.5", client=fake_client)
+
+    response = asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
+
+    assert response.content == "Bonjour !"
+    assert "<think>" not in response.content
+
+
+def test_ollama_provider_strips_think_tags_case_insensitively_and_multiline() -> None:
+    fake_client = _ollama_client({"message": {"content": "<THINK>\nline one\nline two\n</THINK>Reply text."}})
+    provider = OllamaProvider(model="qwen3.5", client=fake_client)
+
+    response = asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
+
+    assert response.content == "Reply text."
+
+
+def test_ollama_provider_leaves_ordinary_content_untouched() -> None:
+    fake_client = _ollama_client({"message": {"content": "Bonjour ! Comment puis-je t'aider ?"}})
+    provider = OllamaProvider(model="llama3.2:1b", client=fake_client)
+
+    response = asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
+
+    assert response.content == "Bonjour ! Comment puis-je t'aider ?"
 
 
 def test_anthropic_provider_generate_parses_text_and_usage() -> None:
@@ -93,10 +151,10 @@ def test_anthropic_provider_generate_parses_text_and_usage() -> None:
         usage=SimpleNamespace(input_tokens=20, output_tokens=6),
     )
     fake_client = MagicMock()
-    fake_client.messages.create.return_value = fake_response
+    fake_client.messages.create = AsyncMock(return_value=fake_response)
     provider = AnthropicProvider(model="claude-sonnet-5", api_key="test-key", client=fake_client)
 
-    response = provider.generate([{"role": "user", "content": "Dis bonjour"}])
+    response = asyncio.run(provider.generate([{"role": "user", "content": "Dis bonjour"}]))
 
     assert response.content == "Bonjour !"
     assert response.usage.input_tokens == 20
@@ -109,14 +167,16 @@ def test_anthropic_provider_splits_system_message() -> None:
         usage=SimpleNamespace(input_tokens=1, output_tokens=1),
     )
     fake_client = MagicMock()
-    fake_client.messages.create.return_value = fake_response
+    fake_client.messages.create = AsyncMock(return_value=fake_response)
     provider = AnthropicProvider(model="claude-sonnet-5", api_key="test-key", client=fake_client)
 
-    provider.generate(
-        [
-            {"role": "system", "content": "You are a French tutor."},
-            {"role": "user", "content": "Bonjour"},
-        ]
+    asyncio.run(
+        provider.generate(
+            [
+                {"role": "system", "content": "You are a French tutor."},
+                {"role": "user", "content": "Bonjour"},
+            ]
+        )
     )
 
     _, kwargs = fake_client.messages.create.call_args
@@ -130,10 +190,10 @@ def test_anthropic_provider_passes_temperature_through() -> None:
         usage=SimpleNamespace(input_tokens=1, output_tokens=1),
     )
     fake_client = MagicMock()
-    fake_client.messages.create.return_value = fake_response
+    fake_client.messages.create = AsyncMock(return_value=fake_response)
     provider = AnthropicProvider(model="claude-sonnet-5", api_key="test-key", client=fake_client)
 
-    provider.generate([{"role": "user", "content": "hi"}], temperature=0.0)
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}], temperature=0.0))
 
     _, kwargs = fake_client.messages.create.call_args
     assert kwargs["temperature"] == 0.0
@@ -145,10 +205,10 @@ def test_anthropic_provider_omits_temperature_when_not_given() -> None:
         usage=SimpleNamespace(input_tokens=1, output_tokens=1),
     )
     fake_client = MagicMock()
-    fake_client.messages.create.return_value = fake_response
+    fake_client.messages.create = AsyncMock(return_value=fake_response)
     provider = AnthropicProvider(model="claude-sonnet-5", api_key="test-key", client=fake_client)
 
-    provider.generate([{"role": "user", "content": "hi"}])
+    asyncio.run(provider.generate([{"role": "user", "content": "hi"}]))
 
     _, kwargs = fake_client.messages.create.call_args
     assert "temperature" not in kwargs
@@ -162,10 +222,10 @@ def test_anthropic_provider_parses_tool_use_blocks() -> None:
         usage=SimpleNamespace(input_tokens=5, output_tokens=2),
     )
     fake_client = MagicMock()
-    fake_client.messages.create.return_value = fake_response
+    fake_client.messages.create = AsyncMock(return_value=fake_response)
     provider = AnthropicProvider(model="claude-sonnet-5", api_key="test-key", client=fake_client)
 
-    response = provider.generate([{"role": "user", "content": "switch to french"}])
+    response = asyncio.run(provider.generate([{"role": "user", "content": "switch to french"}]))
 
     assert response.content == ""
     assert response.tool_calls == [{"id": "tool_1", "name": "switch_subject", "input": {"subject": "french"}}]
@@ -201,6 +261,30 @@ def test_get_provider_rejects_unknown_provider(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(ValueError):
         get_provider()
+
+
+def test_get_provider_ollama_think_defaults_to_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MODEL_PROVIDER", "ollama")
+    monkeypatch.delenv("OLLAMA_THINK", raising=False)
+
+    provider = get_provider()
+
+    assert isinstance(provider, OllamaProvider)
+    assert provider._think is False
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("true", True), ("1", True), ("yes", True), ("on", True), ("false", False), ("0", False), ("", False)],
+)
+def test_get_provider_reads_ollama_think_env_var(monkeypatch: pytest.MonkeyPatch, value: str, expected: bool) -> None:
+    monkeypatch.setenv("MODEL_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_THINK", value)
+
+    provider = get_provider()
+
+    assert isinstance(provider, OllamaProvider)
+    assert provider._think is expected
 
 
 @skip_without_tesseract
@@ -240,10 +324,10 @@ def test_get_vision_provider_rejects_unknown_provider(monkeypatch: pytest.Monkey
 
 def test_ollama_embedding_provider_parses_response() -> None:
     fake_client = MagicMock()
-    fake_client.embed.return_value = {"embeddings": [[0.1, 0.2, 0.3]], "prompt_eval_count": 5}
+    fake_client.embed = AsyncMock(return_value={"embeddings": [[0.1, 0.2, 0.3]], "prompt_eval_count": 5})
     provider = OllamaEmbeddingProvider(model="nomic-embed-text", client=fake_client)
 
-    response = provider.embed(["hello"])
+    response = asyncio.run(provider.embed(["hello"]))
 
     fake_client.embed.assert_called_once_with(model="nomic-embed-text", input=["hello"])
     assert response.embeddings == [[0.1, 0.2, 0.3]]
@@ -258,14 +342,16 @@ def test_ollama_embedding_provider_retries_on_transient_failure() -> None:
     vision-transcription pass for a downstream, free, local embedding step.
     """
     fake_client = MagicMock()
-    fake_client.embed.side_effect = [
-        ConnectionError("connection refused"),
-        {"embeddings": [[0.1, 0.2]], "prompt_eval_count": 3},
-    ]
+    fake_client.embed = AsyncMock(
+        side_effect=[
+            ConnectionError("connection refused"),
+            {"embeddings": [[0.1, 0.2]], "prompt_eval_count": 3},
+        ]
+    )
     provider = OllamaEmbeddingProvider(model="nomic-embed-text", client=fake_client)
 
-    with patch("app.models.ollama_embedding_adapter.time.sleep") as fake_sleep:
-        response = provider.embed(["hello"])
+    with patch("asyncio.sleep", new_callable=AsyncMock) as fake_sleep:
+        response = asyncio.run(provider.embed(["hello"]))
 
     assert response.embeddings == [[0.1, 0.2]]
     assert fake_client.embed.call_count == 2
@@ -274,10 +360,10 @@ def test_ollama_embedding_provider_retries_on_transient_failure() -> None:
 
 def test_ollama_embedding_provider_raises_after_exhausting_retries() -> None:
     fake_client = MagicMock()
-    fake_client.embed.side_effect = ConnectionError("connection refused")
+    fake_client.embed = AsyncMock(side_effect=ConnectionError("connection refused"))
     provider = OllamaEmbeddingProvider(model="nomic-embed-text", client=fake_client)
 
-    with patch("app.models.ollama_embedding_adapter.time.sleep"), pytest.raises(ConnectionError):
-        provider.embed(["hello"])
+    with patch("asyncio.sleep", new_callable=AsyncMock), pytest.raises(ConnectionError):
+        asyncio.run(provider.embed(["hello"]))
 
     assert fake_client.embed.call_count == 3

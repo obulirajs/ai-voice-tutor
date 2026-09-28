@@ -29,6 +29,8 @@ export function SettingsPanel() {
   const loadVoices = useAppStore((state) => state.loadVoices)
   const setSelectedVoice = useAppStore((state) => state.setSelectedVoice)
   const previewVoice = useAppStore((state) => state.previewVoice)
+  const interruptBySpeaking = useAppStore((state) => state.interruptBySpeaking)
+  const setInterruptBySpeaking = useAppStore((state) => state.setInterruptBySpeaking)
   const { theme, setTheme } = useTheme()
   const panelRef = useModalDismiss(isOpen, closeSettingsPanel)
   const navigate = useNavigate()
@@ -138,6 +140,15 @@ export function SettingsPanel() {
               </button>
             ))}
           </div>
+          <label className="settings-panel__checkbox-row">
+            <input
+              type="checkbox"
+              checked={interruptBySpeaking}
+              onChange={(event) => setInterruptBySpeaking(event.target.checked)}
+            />
+            Interrupt by speaking
+          </label>
+          <p className="settings-panel__description">Works best with headphones.</p>
         </section>
 
         <section className="settings-panel__section">
