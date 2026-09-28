@@ -34,6 +34,7 @@ backend/piper_voices/
 
 # Env files
 .env
+.env.backup
 *.env.local
 
 # Node / frontend
