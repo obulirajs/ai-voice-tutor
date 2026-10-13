@@ -1,5 +1,28 @@
 # Project Tutor — Backend
 
+A voice-interactive AI tutor for school students. Speak a question, hear an answer grounded in your own textbook, with the source page shown on screen. Built first for CBSE Grade 10 French.
+
+> Personal project. No textbooks or student data are included in this repo. Bring your own PDF.
+
+## What it does
+- **Voice in, voice out:** local speech recognition (faster-whisper) and speech synthesis (Piper / edge-tts).
+- **Grounded answers:** retrieves passages from an uploaded textbook and answers from them, with page citations. Off-topic questions get an explicit "not covered" reply.
+- **Visual companion:** shows tables, formulas, diagrams and the source textbook page next to the conversation.
+- **Parent controls:** role-based views (student / parent), a cost and usage dashboard for parents, and an off-by-default switch for live web references.
+
+## Architecture
+A modular monolith: one deployable app, with each module (`voice`, `models`, `ingestion`, `knowledge`, `orchestration`, `observability`, `storage`, `api`) exposed through a clean interface. Model, embedding and vector-store providers are swappable adapters (Anthropic API by default, Ollama for offline use).
+
+Deliberately not used: LangChain/LangGraph, message queues, multi-agent frameworks. See `../docs/` for the overview, architecture, technical design and development plan.
+
+## Tech stack
+Python, FastAPI, SQLite, sqlite-vec, faster-whisper, Piper, Anthropic SDK, Ollama · React, Vite, TypeScript (frontend, see `../frontend/README.md`)
+
+## Quality checks
+    pytest && ruff check . && mypy .
+
+400+ automated tests, linted and type-checked.
+
 ## Setup
     python -m venv .venv
     # Windows:  .venv\Scripts\activate
