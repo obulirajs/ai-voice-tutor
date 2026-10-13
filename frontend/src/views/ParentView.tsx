@@ -8,7 +8,14 @@ import {
   getUsageSummary,
   NetworkError,
 } from '../api'
-import type { ParentSettings, RetrievalHealth, SessionListItem, UsageSummary } from '../api'
+import type {
+  ParentSettings,
+  RetrievalHealth,
+  SessionListItem,
+  SessionSortDirection,
+  SessionSortField,
+  UsageSummary,
+} from '../api'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { useAppStore } from '../store'
 import './ParentView.css'
@@ -23,6 +30,13 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
 ]
 
 const SESSION_PAGE_SIZE = 20
+
+const SESSION_SORT_COLUMNS: { field: SessionSortField; label: string }[] = [
+  { field: 'created_at', label: 'Date' },
+  { field: 'subject_name', label: 'Subject' },
+  { field: 'turn_count', label: 'Turns' },
+  { field: 'cost_usd', label: 'Cost' },
+]
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   generation: 'LLM Generation',
@@ -135,9 +149,9 @@ function PeriodDashboard({ period }: { period: Period }) {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [sessionsStatus, setSessionsStatus] = useState<SectionStatus>('loading')
   const [sessionsError, setSessionsError] = useState<string | null>(null)
-  const [sessionsOffset, setSessionsOffset] = useState(0)
-  const [sessionsHasMore, setSessionsHasMore] = useState(false)
-  const [sessionsLoadingMore, setSessionsLoadingMore] = useState(false)
+  const [sessionsPage, setSessionsPage] = useState(0)
+  const [sessionsSortBy, setSessionsSortBy] = useState<SessionSortField>('created_at')
+  const [sessionsSortDir, setSessionsSortDir] = useState<SessionSortDirection>('desc')
 
   useEffect(() => {
     let cancelled = false
@@ -177,38 +191,53 @@ function PeriodDashboard({ period }: { period: Period }) {
 
   useEffect(() => {
     let cancelled = false
-    getSessionList(period, SESSION_PAGE_SIZE, 0)
-      .then((data) => {
+
+    async function loadSessions() {
+      setSessionsStatus('loading')
+      try {
+        const data = await getSessionList(
+          period,
+          SESSION_PAGE_SIZE,
+          sessionsPage * SESSION_PAGE_SIZE,
+          sessionsSortBy,
+          sessionsSortDir,
+        )
         if (cancelled) return
+        // Paging past the last page (e.g. the final page emptied out after
+        // a refresh) lands on an empty result -- step back a page rather
+        // than showing the period's "no data" empty state, which would
+        // strand the user with no way back to their data.
+        if (data.length === 0 && sessionsPage > 0) {
+          setSessionsPage((page) => Math.max(0, page - 1))
+          return
+        }
         setSessions(data)
-        setSessionsHasMore(data.length === SESSION_PAGE_SIZE)
         setSessionsStatus('ready')
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         if (cancelled) return
         setSessionsError(error instanceof Error ? error.message : null)
         setSessionsStatus(statusOf(error))
-      })
+      }
+    }
+
+    loadSessions()
     return () => {
       cancelled = true
     }
-  }, [period])
+  }, [period, sessionsPage, sessionsSortBy, sessionsSortDir])
 
-  const loadMoreSessions = useCallback(() => {
-    const nextOffset = sessionsOffset + SESSION_PAGE_SIZE
-    setSessionsLoadingMore(true)
-    getSessionList(period, SESSION_PAGE_SIZE, nextOffset)
-      .then((data) => {
-        setSessions((previous) => [...previous, ...data])
-        setSessionsOffset(nextOffset)
-        setSessionsHasMore(data.length === SESSION_PAGE_SIZE)
-      })
-      .catch(() => {
-        // "Show more" failing leaves the already-loaded rows in place --
-        // the user can just try again.
-      })
-      .finally(() => setSessionsLoadingMore(false))
-  }, [period, sessionsOffset])
+  const toggleSessionsSort = useCallback(
+    (field: SessionSortField) => {
+      setSessionsPage(0)
+      if (field === sessionsSortBy) {
+        setSessionsSortDir(sessionsSortDir === 'asc' ? 'desc' : 'asc')
+      } else {
+        setSessionsSortBy(field)
+        setSessionsSortDir('asc')
+      }
+    },
+    [sessionsSortBy, sessionsSortDir],
+  )
 
   const totalCostByType = summary
     ? Object.values(summary.cost_by_event_type).reduce((sum, value) => sum + value, 0)
@@ -331,11 +360,24 @@ function PeriodDashboard({ period }: { period: Period }) {
                 <table className="parent-view__table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Subject</th>
-                      <th>Turns</th>
-                      <th>Cost</th>
-                      <th>Session ID</th>
+                      {SESSION_SORT_COLUMNS.map(({ field, label }) => {
+                        const isActive = field === sessionsSortBy
+                        return (
+                          <th key={field} aria-sort={isActive ? (sessionsSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                            <button
+                              type="button"
+                              className={`parent-view__sort-button ${isActive ? 'parent-view__sort-button--active' : ''}`}
+                              onClick={() => toggleSessionsSort(field)}
+                            >
+                              {label}
+                              <span className="parent-view__sort-indicator" aria-hidden="true">
+                                {isActive ? (sessionsSortDir === 'asc' ? '▲' : '▼') : ''}
+                              </span>
+                            </button>
+                          </th>
+                        )
+                      })}
+                      <th className="parent-view__table-th-plain">Session ID</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -353,16 +395,25 @@ function PeriodDashboard({ period }: { period: Period }) {
                   </tbody>
                 </table>
               </div>
-              {sessionsHasMore && (
+              <div className="parent-view__pagination">
                 <button
                   type="button"
-                  className="parent-view__show-more"
-                  onClick={loadMoreSessions}
-                  disabled={sessionsLoadingMore}
+                  className="parent-view__pagination-button"
+                  onClick={() => setSessionsPage((page) => Math.max(0, page - 1))}
+                  disabled={sessionsPage === 0}
                 >
-                  {sessionsLoadingMore ? 'Loading…' : 'Show more'}
+                  Previous
                 </button>
-              )}
+                <span className="parent-view__pagination-label">Page {sessionsPage + 1}</span>
+                <button
+                  type="button"
+                  className="parent-view__pagination-button"
+                  onClick={() => setSessionsPage((page) => page + 1)}
+                  disabled={sessions.length < SESSION_PAGE_SIZE}
+                >
+                  Next
+                </button>
+              </div>
             </>
           ))}
       </section>

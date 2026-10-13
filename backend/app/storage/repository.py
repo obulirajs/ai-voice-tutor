@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal, cast
 
-from sqlalchemy import case, func, select
+from sqlalchemy import ColumnElement, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ORCHESTRATION_DEFAULTS
@@ -12,6 +12,8 @@ from app.config import ORCHESTRATION_DEFAULTS
 from .models import ChatSession, Document, Message, Subject, UsageEvent
 
 Period = Literal["day", "week", "month", "all"]
+SessionSortField = Literal["created_at", "subject_name", "cost_usd", "turn_count"]
+SessionSortDirection = Literal["asc", "desc"]
 
 _PERIOD_LOOKBACK = {
     "day": timedelta(days=1),
@@ -324,27 +326,49 @@ async def get_usage_summary(db: AsyncSession, period: Period) -> UsageSummary:
     )
 
 
-async def get_session_list(db: AsyncSession, period: Period, limit: int, offset: int) -> list[SessionSummary]:
-    """Sessions created within `period`, newest first, with their subject
-    name and aggregated cost/turn/event counts (an outer join, so a session
-    with zero usage_events still appears, with zeroes)."""
+async def get_session_list(
+    db: AsyncSession,
+    period: Period,
+    limit: int,
+    offset: int,
+    sort_by: SessionSortField = "created_at",
+    sort_dir: SessionSortDirection = "desc",
+) -> list[SessionSummary]:
+    """Sessions created within `period`, sorted by `sort_by`/`sort_dir`
+    (newest-first by default), with their subject name and aggregated
+    cost/turn/event counts (an outer join, so a session with zero
+    usage_events still appears, with zeroes)."""
     cutoff = _period_cutoff(period)
     filters = [] if cutoff is None else [ChatSession.created_at >= cutoff]
+
+    cost_usd = func.coalesce(func.sum(UsageEvent.cost_usd), 0.0).label("cost_usd")
+    turn_count = func.count(case((UsageEvent.event_type == "generation", 1))).label("turn_count")
+
+    sort_columns: dict[SessionSortField, ColumnElement[Any]] = {
+        "created_at": cast(ColumnElement[Any], ChatSession.created_at),
+        "subject_name": cast(ColumnElement[Any], Subject.name),
+        "cost_usd": cost_usd,
+        "turn_count": turn_count,
+    }
+    order_column = sort_columns[sort_by]
+    order_clause = order_column.asc() if sort_dir == "asc" else order_column.desc()
 
     result = await db.execute(
         select(
             ChatSession.id,
             Subject.name,
             ChatSession.created_at,
-            func.coalesce(func.sum(UsageEvent.cost_usd), 0.0),
-            func.count(case((UsageEvent.event_type == "generation", 1))),
+            cost_usd,
+            turn_count,
             func.count(UsageEvent.id),
         )
         .join(Subject, Subject.id == ChatSession.subject_id)
         .outerjoin(UsageEvent, UsageEvent.session_id == ChatSession.id)
         .where(*filters)
         .group_by(ChatSession.id, Subject.name, ChatSession.created_at)
-        .order_by(ChatSession.created_at.desc())
+        # ChatSession.id as a tiebreaker keeps page boundaries stable when
+        # the primary sort key has duplicate values (e.g. same cost/turns).
+        .order_by(order_clause, ChatSession.id)
         .limit(limit)
         .offset(offset)
     )

@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage import (
     Period,
+    SessionSortDirection,
+    SessionSortField,
     get_db,
     get_retrieval_health,
     get_session_list,
@@ -90,11 +92,13 @@ async def usage_sessions(
     period: Period = "week",
     limit: int = 20,
     offset: int = 0,
+    sort_by: SessionSortField = "created_at",
+    sort_dir: SessionSortDirection = "desc",
     role: Role = Depends(get_role),  # noqa: B008
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> list[SessionSummaryResponse]:
     _require_parent(role)
-    sessions = await get_session_list(db, period, limit, offset)
+    sessions = await get_session_list(db, period, limit, offset, sort_by, sort_dir)
 
     return [
         SessionSummaryResponse(

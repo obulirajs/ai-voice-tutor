@@ -216,6 +216,105 @@ def test_usage_sessions_lists_newest_first_with_aggregated_cost(
     assert all(s["subject_name"] == "French" for s in sessions)
 
 
+async def _seed_three_sessions(db: AsyncSession) -> None:
+    """Three sessions with distinct subject/cost/turn-count combinations so
+    each sort field produces a different order than the others."""
+    french = await get_or_create_subject(db, "French")
+    math = await get_or_create_subject(db, "Math")
+
+    low_cost_many_turns = await create_session(db, math.id)
+    low_cost_many_turns.created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+    for _ in range(3):
+        db.add(
+            UsageEvent(
+                session_id=low_cost_many_turns.id,
+                subject_id=math.id,
+                event_type="generation",
+                provider="anthropic",
+                model="claude",
+                cost_usd=0.01,
+            )
+        )
+
+    high_cost_one_turn = await create_session(db, french.id)
+    high_cost_one_turn.created_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    db.add(
+        UsageEvent(
+            session_id=high_cost_one_turn.id,
+            subject_id=french.id,
+            event_type="generation",
+            provider="anthropic",
+            model="claude",
+            cost_usd=0.5,
+        )
+    )
+
+    mid_cost_two_turns = await create_session(db, french.id)
+    mid_cost_two_turns.created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    for _ in range(2):
+        db.add(
+            UsageEvent(
+                session_id=mid_cost_two_turns.id,
+                subject_id=french.id,
+                event_type="generation",
+                provider="anthropic",
+                model="claude",
+                cost_usd=0.1,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("sort_by", "sort_dir", "expected_costs"),
+    [
+        ("cost_usd", "asc", [0.03, 0.2, 0.5]),
+        ("cost_usd", "desc", [0.5, 0.2, 0.03]),
+        ("turn_count", "asc", [1, 2, 3]),
+        ("turn_count", "desc", [3, 2, 1]),
+        ("subject_name", "asc", ["French", "French", "Math"]),
+        ("created_at", "asc", [0.03, 0.5, 0.2]),
+    ],
+)
+def test_usage_sessions_sorts_by_requested_field(
+    make_client: Callable[[Seed | None], TestClient],
+    sort_by: str,
+    sort_dir: str,
+    expected_costs: list[float | int | str],
+) -> None:
+    client = make_client(_seed_three_sessions)
+
+    response = client.get(
+        "/api/parent/usage/sessions",
+        params={"period": "all", "sort_by": sort_by, "sort_dir": sort_dir},
+        headers={"X-Tutor-Role": "parent"},
+    )
+
+    assert response.status_code == 200
+    sessions = response.json()
+    assert len(sessions) == 3
+    if sort_by == "cost_usd" or sort_by == "created_at":
+        actual = [pytest.approx(s["cost_usd"]) for s in sessions]
+        assert actual == [pytest.approx(v) for v in expected_costs]
+    elif sort_by == "turn_count":
+        assert [s["turn_count"] for s in sessions] == expected_costs
+    else:
+        assert [s["subject_name"] for s in sessions] == expected_costs
+
+
+def test_usage_sessions_rejects_invalid_sort_field(
+    make_client: Callable[[Seed | None], TestClient],
+) -> None:
+    client = make_client(None)
+
+    response = client.get(
+        "/api/parent/usage/sessions",
+        params={"period": "all", "sort_by": "not_a_field"},
+        headers={"X-Tutor-Role": "parent"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_usage_sessions_respects_limit_and_offset(
     make_client: Callable[[Seed | None], TestClient],
 ) -> None:

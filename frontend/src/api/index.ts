@@ -36,6 +36,8 @@ export type {
   Role,
   SessionListItem,
   SessionPreview,
+  SessionSortDirection,
+  SessionSortField,
   SessionUsage,
   SourceCitation,
   Subject,

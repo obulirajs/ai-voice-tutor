@@ -14,6 +14,8 @@ import type {
   Role,
   SessionListItem,
   SessionPreview,
+  SessionSortDirection,
+  SessionSortField,
   SessionUsage,
   Subject,
   TeachingMode,
@@ -172,8 +174,20 @@ export function getUsageSummary(period = 'week'): Promise<UsageSummary> {
   return request<UsageSummary>(`/api/parent/usage/summary?${new URLSearchParams({ period }).toString()}`)
 }
 
-export function getSessionList(period = 'week', limit = 20, offset = 0): Promise<SessionListItem[]> {
-  const params = new URLSearchParams({ period, limit: String(limit), offset: String(offset) })
+export function getSessionList(
+  period = 'week',
+  limit = 20,
+  offset = 0,
+  sortBy: SessionSortField = 'created_at',
+  sortDir: SessionSortDirection = 'desc',
+): Promise<SessionListItem[]> {
+  const params = new URLSearchParams({
+    period,
+    limit: String(limit),
+    offset: String(offset),
+    sort_by: sortBy,
+    sort_dir: sortDir,
+  })
   return request<SessionListItem[]>(`/api/parent/usage/sessions?${params.toString()}`)
 }
 

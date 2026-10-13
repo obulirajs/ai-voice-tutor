@@ -99,6 +99,10 @@ export interface SessionListItem {
   event_count: number
 }
 
+// Mirrors backend/app/storage/repository.py's SessionSortField/SessionSortDirection.
+export type SessionSortField = 'created_at' | 'subject_name' | 'cost_usd' | 'turn_count'
+export type SessionSortDirection = 'asc' | 'desc'
+
 export interface RetrievalHealth {
   total_queries: number
   guardrail_triggered_count: number
